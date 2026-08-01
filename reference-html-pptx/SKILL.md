@@ -1,11 +1,19 @@
 ---
 name: reference-html-pptx
-description: Build polished 16:9 HTML presentation pages from a user-provided text-free background image, one or more slide design reference images, and page titles/body copy, then render, visually verify, and export the result as a hybrid editable PPTX. Use when the user asks to 仿照参考图做PPT、根据背景图和内容页示例生成HTML幻灯片、提炼页面强调色和组件样式、批量生成同风格页面、网页PPT转可编辑PPTX, or provides background/reference screenshots plus slide copy. Do not use Dashi PPT.
+description: Build polished, logically structured 16:9 HTML presentation pages from a user-provided text-free background image, one or more design reference images, and slide copy, then visually verify and export them as structurally editable PPTX files. Use when the user asks to 仿照参考图做PPT、根据背景图和内容页示例生成HTML幻灯片、优化PPT内容逻辑与版式、批量生成同风格多页演示、网页PPT转可编辑PPTX, or provides background/reference screenshots plus slide content. Do not use Dashi PPT.
 ---
 
 # Reference HTML PPTX
 
-Create slides with Codex's own HTML/CSS design ability. Treat the background, reference, and copy as three separate inputs with different authority.
+## Version
+
+Current design-workflow version: **2.0.0**.
+
+Create slides with Codex's own content reasoning and HTML/CSS design ability. Optimize in this order:
+
+**conclusion → semantic relationships → grouping → hierarchy → layout → wireframe → visual design → PPTX annotation → dual-render QA**
+
+Do not begin styling before the content model and layout rationale are clear.
 
 ## Input contract
 
@@ -13,72 +21,102 @@ Collect or identify:
 
 - text-free 16:9 background image;
 - at least one content-slide design reference image;
-- title and body copy for each new page;
-- desired output: HTML only or HTML plus PPTX. Default to both when the user asks for a complete PPT workflow.
+- title and body copy for each page;
+- desired output: HTML only or HTML plus PPTX. Default to both for a complete PPT workflow.
 
-If one input is absent, ask only when it materially changes the result. Reuse the last confirmed background and reference style during the same task unless the user replaces them.
+Reuse the last confirmed background and reference language during the same task unless the user replaces them. Ask only when a missing input materially changes the result.
 
 ## Authority order
 
-1. Preserve the background image exactly as the bottom layer. Stage it inside the output folder; never link to a temporary clipboard path.
-2. Derive visual language from the content reference: accent colors, typography hierarchy, component types, borders, radii, shadows, icon treatment, spacing, and composition rhythm.
-3. Recompose the user's new copy for clarity. Do not copy the reference page's original text or force new content into its exact geometry.
-4. Preserve all user facts. Small bridging labels are allowed; do not invent claims, numbers, or examples.
+1. Preserve user facts and required relationships. Do not invent claims, numbers, actors, or process steps.
+2. Clarify the page's intended conclusion and reorganize copy to make that conclusion understandable.
+3. Preserve the supplied background exactly as the bottom layer and stage it inside the output folder.
+4. Derive the visual system from the reference: palette, typography, components, spacing, shadows, icons, and rhythm. Match its design language, not its original subject matter or geometry.
 
-Read [references/design-extraction.md](references/design-extraction.md) before designing. Read [references/html-contract.md](references/html-contract.md) before writing HTML.
+Read [references/design-reasoning.md](references/design-reasoning.md) before planning. Read [references/design-extraction.md](references/design-extraction.md) before styling. Read [references/html-contract.md](references/html-contract.md) only after the visual plan is frozen or when PPTX annotation begins.
 
 ## Workflow
 
-1. Inspect every image at original detail. Identify which image is the background and which is the content reference.
-2. State a concise design extraction in commentary: palette, component family, typography, emphasis, and composition.
-3. Create a new output directory. Copy the background and any required local assets into its `assets/` folder.
-4. Create a self-contained `index.html` using `apply_patch`. Use one `.slide` element per logical page and set `data-slide-index`.
-5. Make layout decisions from content density:
-   - sequence/process: numbered vertical or horizontal steps;
-   - summary/framework: modular cards with one dominant takeaway;
-   - comparison: mirrored columns or rows;
-   - quote/template: one large readable text region plus a supporting visual anchor.
-6. Use CSS or Unicode for simple shapes and icons. **When PPTX is requested, every structural card, container, badge, circle, process node, matrix cell, axis, arrow, and connector that carries layout or logic meaning must be explicitly marked** with `data-pptx-shape` or `data-pptx-line-*`. Only purely decorative gradients, glows, illustrations, and non-semantic ornaments may remain unmarked and flattened. Do not treat CSS appearance alone as sufficient: unmarked CSS graphics become background pixels.
-7. Render with Edge/Chrome at 1600×900. Run `scripts/inspect-slide-html.ps1` for deterministic file and screenshot checks.
-8. Visually inspect the screenshot. Fix overflow, clipping, weak hierarchy, inconsistent spacing, or poor contrast. Do not finish on the first uninspected render.
-9. When PPTX is requested, read and use the installed `export-editable-pptx` skill. Export with the selector `.slide`:
+### 1. Inspect and stage inputs
 
-```powershell
-& "<export-editable-pptx-skill-root>/scripts/export-editable-pptx.ps1" `
-  -InputPath "<absolute-path-to-index.html>" `
-  -OutputPath "<absolute-output.pptx>" `
-  -SlideSelector ".slide"
-```
+Inspect every image at original detail. Identify background versus design reference. Create a new output directory and copy all required local assets into `assets/`; never leave temporary clipboard paths in final HTML.
 
-10. Verify the PPTX exists, has the expected page count, and contains editable text, shape, and line objects. Before accepting export, compare the exporter counts against the HTML structure audit: for a logic-heavy deck, `editable shape objects: 0` or `editable line objects: 0` is an automatic failure. A deck with dozens of visible cards but only one or two editable shapes is also an automatic failure. When PowerPoint is installed, run the exporter skill's `scripts/render-pptx-preview.ps1`, inspect the resulting PNG, and compare it with the HTML screenshot.
+### 2. Build the content model
 
-## Quality bar
+For every logical page, create `design-plan.json` in the output directory with:
 
-- Keep every slide at 16:9 with no scrollbars.
-- Use the actual supplied background, not an approximate CSS recreation.
-- Match the reference's design system, not its subject matter.
-- Maintain a clear title, one dominant message, and deliberate reading order.
-- Avoid generic dashboard card walls when the reference uses another component grammar.
-- Prefer fewer, larger components over many tiny labels.
-- Keep body text comfortably legible at 1600×900.
-- Avoid text embedded in decorative pseudo-elements; PPTX export cannot rebuild it reliably.
-- Make visible text real DOM text. `contenteditable="true"` is optional and useful for user adjustment.
-- Preserve the original HTML and staged assets alongside the PPTX.
-- For logic diagrams, target at least 90% native-editable coverage of semantic containers and connectors. Report any intentionally flattened structural objects explicitly; otherwise do not deliver.
+- `coreQuestion`: the one question the page answers;
+- `takeaway`: the one-sentence conclusion the audience should retain;
+- `requiredFacts`: facts and labels that must remain;
+- `relationType`: sequence, hierarchy, collaboration, flow, cycle, comparison, classification, matrix, or cause-response;
+- `mainPath`: the primary reading or process path;
+- `groups`: usually 3–5 macro regions, treated as a heuristic rather than a quota;
+- `supportingMechanisms`: governance, validation, context, or explanation;
+- `exceptions`: conditions paired with responses;
+- `layoutFamily` and `primaryVisual`;
+- `referenceTraits`: the visual traits to preserve.
+
+If the page answers multiple unrelated questions or needs more than three information levels, split it when allowed; otherwise prioritize one main argument and demote the rest to supporting regions. Normalize parallel labels into consistent noun or verb structures.
+
+### 3. Choose structure before style
+
+Map the semantic relationship to a suitable layout using `design-reasoning.md`. For complex pages, evaluate at least two wireframe candidates internally. Choose based on:
+
+1. relationship fidelity;
+2. obvious reading order;
+3. hierarchy and grouping;
+4. density balance;
+5. fit with the reference's design language.
+
+Do not choose orbit, radial, timeline, matrix, or card-grid layouts unless the content relationship justifies them. Establish a 12-column grid or another explicit alignment system, title zone, content bounds, macro regions, and whitespace before styling.
+
+### 4. Design the HTML page
+
+Create a self-contained `index.html` with one `.slide[data-slide-index]` per logical page. Use large structures for major relationships, medium structures for modules, and small components for labels and details. Maintain one primary reading path; comparison pages may use two intentionally equal panels.
+
+Use hierarchy, alignment, distance, whitespace, and background regions before adding borders or cards. Avoid card-per-sentence layouts, nested cards, duplicate borders, and decoration without information value. Keep accent color scarce and purposeful.
+
+### 5. Run HTML visual QA
+
+Render at 1600×900 with `scripts/inspect-slide-html.ps1`. Inspect the PNG at original detail. Apply the design acceptance gate in `design-reasoning.md`; fix logic, hierarchy, density, alignment, typography, or decoration failures before proceeding.
+
+Do not accept a page merely because it has no overflow. A page fails if the conclusion, reading path, relationship meaning, or primary hierarchy is unclear.
+
+### 6. Annotate for PPTX after design freeze
+
+Only after the HTML composition passes visual QA, add `data-pptx-shape` and `data-pptx-line-*` metadata to semantic cards, containers, nodes, matrix cells, axes, arrows, and connectors. Keep decorative gradients, glows, illustrations, and non-semantic ornaments unmarked and flattened.
+
+Re-render once after annotation to confirm that metadata did not change the HTML appearance. Follow `html-contract.md`; do not redesign the page around exporter limitations.
+
+### 7. Export and verify PPTX
+
+Read and use the installed `export-editable-pptx` skill. Export with `.slide` as the selector. Verify the expected slide, text, shape, and line counts. For logic-heavy pages, zero editable shapes or zero editable lines is an automatic failure; target at least 90% native-editable coverage of semantic structures.
+
+When PowerPoint is installed, render the PPTX through `render-pptx-preview.ps1` and compare it with the HTML PNG. Reject duplicated text, altered hierarchy, unexpected wrapping, clipping, displaced connectors, or meaningful visual drift.
+
+## Multi-page rules
+
+- Give every page one narrative role and one takeaway.
+- Keep the design system consistent while varying layout families according to content relationships.
+- Do not repeat the same card grid or composition on consecutive pages without semantic reason.
+- Maintain deck-level progression: setup → development → evidence/structure → implication/action.
+- Check both individual-page quality and transitions between pages.
 
 ## Deliverables
 
 Return absolute links to:
 
 - `index.html`;
-- rendered preview PNG;
-- `.pptx` when requested.
+- HTML preview PNGs;
+- `.pptx` and PowerPoint-rendered preview PNGs when requested.
 
-Report the slide count, editable text-object count, editable shape-object count, and editable line-object count from the exporter. For logic-heavy pages, also report structural editability coverage and identify any intentionally flattened semantic objects. Mention font-substitution risk only when the deck uses non-system fonts.
+Report slide count, editable text-object count, editable shape-object count, editable line-object count, and structural editability coverage for logic-heavy pages. Identify intentionally flattened semantic objects. Mention font substitution only when non-system fonts are used.
 
 ## Prohibitions
 
 - Do not invoke or depend on Dashi PPT.
-- Do not overwrite an earlier page unless the user explicitly asks; create a new page or deck file.
+- Do not overwrite an earlier page unless explicitly requested.
 - Do not use temporary clipboard paths in final HTML.
+- Do not force content into the reference's exact geometry.
+- Do not use decorative arrows, rings, tracks, or connectors without semantic meaning.
 - Do not claim arbitrary graphics, animations, canvas, filters, or videos are editable in PowerPoint.
