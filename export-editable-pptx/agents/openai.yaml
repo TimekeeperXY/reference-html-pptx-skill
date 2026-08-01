@@ -1,0 +1,4 @@
+interface:
+  display_name: "网页 PPT 转可编辑 PPTX"
+  short_description: "将 HTML 文字、形状和连接线重建为可编辑 PPTX"
+  default_prompt: "Use $export-editable-pptx to convert my HTML deck into a PPTX with editable text, shapes, and connectors."

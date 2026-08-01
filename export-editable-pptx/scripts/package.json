@@ -1,0 +1,10 @@
+{
+  "name": "export-editable-pptx-skill-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "playwright-core": "^1.60.0",
+    "pptxgenjs": "^4.0.1"
+  }
+}

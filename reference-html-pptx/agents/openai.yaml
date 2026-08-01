@@ -1,0 +1,4 @@
+interface:
+  display_name: "参考图生成可编辑PPT"
+  short_description: "依据背景图、设计参考和文案生成HTML与结构可编辑PPTX"
+  default_prompt: "Use $reference-html-pptx to turn my background image, design reference, and slide copy into a multi-page 16:9 HTML deck and a structurally editable PPTX."

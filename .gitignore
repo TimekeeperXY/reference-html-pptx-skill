@@ -1,0 +1,15 @@
+node_modules/
+__pycache__/
+*.pyc
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+*.pptx
+*.png
+*.jpg
+*.jpeg
+*.webp
+dist/
+temp/
+tmp/
