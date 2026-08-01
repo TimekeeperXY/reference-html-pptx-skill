@@ -1,6 +1,6 @@
 # Design extraction checklist
 
-Extract the reference into a compact design system before composing.
+Extract the reference into a compact design system after the content model and wireframe direction are chosen. The reference supplies visual language; it does not decide the information relationship.
 
 ## Color
 
@@ -20,6 +20,8 @@ Record title scale and weight, body scale, italic usage, keyword emphasis, line 
 
 Measure approximate outer margins, title zone, content bounds, column ratio, card gap, and visual center. Adapt geometry to new copy while preserving the rhythm.
 
+Separate reusable composition traits from page-specific geometry. Reuse margins, rhythm, hierarchy, and component language; do not automatically reuse an orbit, timeline, matrix, or card grid when the new content has a different semantic structure.
+
 ## Content transformation
 
 - Group related sentences into one component.
@@ -27,5 +29,6 @@ Measure approximate outer margins, title zone, content bounds, column ratio, car
 - Convert scenarios into short chips or rows.
 - Keep quoted templates in a large text block with generous line height.
 - Add only neutral organizing labels; never introduce new factual content.
+- Preserve required facts while compressing repeated explanations.
 
 Summarize the extraction in one sentence before implementation, for example: “浅蓝背景、红色强调、白色玻璃长卡、红色圆形图标、黑色斜体正文、关键词加粗变红、柔和投影。”

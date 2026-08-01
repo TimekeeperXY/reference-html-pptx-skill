@@ -4,7 +4,7 @@
 
 ## 包含内容
 
-- `reference-html-pptx/`：分析参考图、设计单页或多页 HTML、标记可编辑结构并完成视觉验收。
+- `reference-html-pptx/`：先完成结论提炼、语义关系建模、版式决策和线框构图，再设计单页或多页 HTML、标记可编辑结构并完成视觉验收。
 - `export-editable-pptx/`：将 HTML 中的文字、标记形状、线条、箭头和连接器重建为 PowerPoint 原生对象；复杂视觉保留为背景。
 
 ## 安装
@@ -33,3 +33,5 @@ Copy-Item -Recurse -Force '.\export-editable-pptx' "$env:USERPROFILE\.codex\skil
 - 渐变、蒙版、复杂阴影和插画：作为背景保留视觉效果。
 
 详细约束分别见两个目录中的 `SKILL.md`。
+
+当前 `reference-html-pptx` 设计工作流版本为 **2.0.0**。
