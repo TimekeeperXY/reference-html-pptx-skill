@@ -3,30 +3,50 @@
 Use this minimum structure:
 
 ```html
-<main class="deck">
-  <section class="slide" data-slide-index="1">...</section>
+<main class="deck-preview">
+  <div class="slide-shell" data-slide-shell>
+    <section class="slide" data-slide-index="1">...</section>
+  </div>
 </main>
 ```
 
 Required CSS behavior:
 
 ```css
-html, body { margin: 0; }
-.slide {
+html, body { margin: 0; background: #e8ebef; }
+.slide-shell {
   position: relative;
+  width: min(1600px, calc(100vw - 64px));
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  scroll-snap-align: start;
+}
+.slide {
+  position: absolute;
+  inset: 0 auto auto 0;
   width: 1600px;
   height: 900px;
   overflow: hidden;
+  transform: scale(var(--slide-scale, 1));
+  transform-origin: 0 0;
 }
 ```
 
-For a single responsive preview, the slide may use `width:min(100vw,calc(100vh * 16 / 9))` and `aspect-ratio:16/9`. For multi-page export, fixed 1600×900 slides are safer; stack them vertically in preview mode.
+Always keep the authored slide at 1600×900. Uniformly scale the complete slide inside the shell for responsive preview. Follow [preview-and-density.md](preview-and-density.md) for deck spacing, scroll snapping, typography, and density metadata.
 
 Use real `<img>` elements or CSS background images with staged relative paths such as `assets/background.png`. Keep all visible copy in DOM elements (`h1`, `p`, `li`, `span`). Avoid SVG `<text>`, canvas text, and rasterized copy.
 
 Each page must be independently renderable with no dependency on application state. Avoid external CDNs, web fonts, remote scripts, and network-only assets.
 
 The editable PPTX exporter works at text-node granularity. Inline `<span>` and `<strong>` elements are safe and preserve mixed emphasis. Add `data-pptx-ignore="true"` to decorative DOM text that should remain flattened into the background rather than becoming editable.
+
+Use these QA markers on semantic HTML:
+
+- `data-slide-content` on the principal composition region;
+- `data-content-block` on its major occupied semantic blocks;
+- `data-density-card="true"` on informational cards whose content-to-container density should be audited;
+- `data-text-role="note"` or `data-text-role="source"` for legitimate 14–15px text;
+- `data-density-exempt="true"` or `data-overflow-exempt="true"` only for a documented semantic exception.
 
 ## Editable shapes
 

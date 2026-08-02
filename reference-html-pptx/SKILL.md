@@ -7,7 +7,7 @@ description: Build polished, logically structured 16:9 HTML presentation pages f
 
 ## Version
 
-Current design-workflow version: **2.0.0**.
+Current design-workflow version: **2.1.0**.
 
 Create slides with Codex's own content reasoning and HTML/CSS design ability. Optimize in this order:
 
@@ -33,7 +33,7 @@ Reuse the last confirmed background and reference language during the same task 
 3. Preserve the supplied background exactly as the bottom layer and stage it inside the output folder.
 4. Derive the visual system from the reference: palette, typography, components, spacing, shadows, icons, and rhythm. Match its design language, not its original subject matter or geometry.
 
-Read [references/design-reasoning.md](references/design-reasoning.md) before planning. Read [references/design-extraction.md](references/design-extraction.md) before styling. Read [references/html-contract.md](references/html-contract.md) only after the visual plan is frozen or when PPTX annotation begins.
+Read [references/design-reasoning.md](references/design-reasoning.md) before planning. Read [references/design-extraction.md](references/design-extraction.md) before styling. Read [references/preview-and-density.md](references/preview-and-density.md) before writing HTML. Read [references/html-contract.md](references/html-contract.md) only after the visual plan is frozen or when PPTX annotation begins.
 
 ## Workflow
 
@@ -54,6 +54,7 @@ For every logical page, create `design-plan.json` in the output directory with:
 - `supportingMechanisms`: governance, validation, context, or explanation;
 - `exceptions`: conditions paired with responses;
 - `layoutFamily` and `primaryVisual`;
+- `densityIntent`: page type, intended content-region occupancy, minimum body size, and any justified density exemptions;
 - `referenceTraits`: the visual traits to preserve.
 
 If the page answers multiple unrelated questions or needs more than three information levels, split it when allowed; otherwise prioritize one main argument and demote the rest to supporting regions. Normalize parallel labels into consistent noun or verb structures.
@@ -72,13 +73,13 @@ Do not choose orbit, radial, timeline, matrix, or card-grid layouts unless the c
 
 ### 4. Design the HTML page
 
-Create a self-contained `index.html` with one `.slide[data-slide-index]` per logical page. Use large structures for major relationships, medium structures for modules, and small components for labels and details. Maintain one primary reading path; comparison pages may use two intentionally equal panels.
+Create a self-contained `index.html` with one fixed 1600×900 `.slide[data-slide-index]` per logical page, wrapped by a preview-only `.slide-shell[data-slide-shell]`. Scale the complete slide for smaller screens; do not make internal typography or geometry viewport-responsive. Use large structures for major relationships, medium structures for modules, and small components for labels and details. Maintain one primary reading path; comparison pages may use two intentionally equal panels.
 
-Use hierarchy, alignment, distance, whitespace, and background regions before adding borders or cards. Avoid card-per-sentence layouts, nested cards, duplicate borders, and decoration without information value. Keep accent color scarce and purposeful.
+Use hierarchy, alignment, distance, whitespace, and background regions before adding borders or cards. Avoid card-per-sentence layouts, nested cards, duplicate borders, and decoration without information value. Keep accent color scarce and purposeful. Mark informational cards with `data-density-card="true"`, the principal content region with `data-slide-content`, and its major occupied blocks with `data-content-block`. Apply exemptions only with a documented semantic reason.
 
 ### 5. Run HTML visual QA
 
-Render at 1600×900 with `scripts/inspect-slide-html.ps1`. Inspect the PNG at original detail. Apply the design acceptance gate in `design-reasoning.md`; fix logic, hierarchy, density, alignment, typography, or decoration failures before proceeding.
+Run `scripts/inspect-slide-html.ps1`. It must produce one PNG per slide plus a continuous-scroll preview and audit page dimensions, separation, preview outline, scroll snapping, font floors, text overflow, and marked-card density. Inspect both the individual PNGs and the continuous preview at original detail. Apply the design acceptance gate in `design-reasoning.md`; fix logic, hierarchy, density, alignment, typography, page separation, or decoration failures before proceeding.
 
 Do not accept a page merely because it has no overflow. A page fails if the conclusion, reading path, relationship meaning, or primary hierarchy is unclear.
 
@@ -97,6 +98,9 @@ When PowerPoint is installed, render the PPTX through `render-pptx-preview.ps1` 
 ## Multi-page rules
 
 - Give every page one narrative role and one takeaway.
+- Treat every page as an independent 16:9 canvas. Put it inside a preview shell, separate shells by 6%–10% of a page height, and place the deck on a contrasting neutral canvas.
+- Use vertical scroll snapping in preview mode. Prefer `proximity`; use `mandatory` only for a deliberate full-screen browsing experience.
+- Do not rely on page numbers alone to distinguish adjacent pages. Page outline, space, shadow, border, or background contrast must remain visible.
 - Keep the design system consistent while varying layout families according to content relationships.
 - Do not repeat the same card grid or composition on consecutive pages without semantic reason.
 - Maintain deck-level progression: setup → development → evidence/structure → implication/action.
@@ -108,6 +112,7 @@ Return absolute links to:
 
 - `index.html`;
 - HTML preview PNGs;
+- a continuous-scroll preview PNG for multi-page decks;
 - `.pptx` and PowerPoint-rendered preview PNGs when requested.
 
 Report slide count, editable text-object count, editable shape-object count, editable line-object count, and structural editability coverage for logic-heavy pages. Identify intentionally flattened semantic objects. Mention font substitution only when non-system fonts are used.
@@ -118,5 +123,8 @@ Report slide count, editable text-object count, editable shape-object count, edi
 - Do not overwrite an earlier page unless explicitly requested.
 - Do not use temporary clipboard paths in final HTML.
 - Do not force content into the reference's exact geometry.
+- Do not use viewport units or viewport-dependent `clamp()` for slide typography; scale the complete 1600×900 canvas instead.
+- Do not shrink normal body copy below 16px to make it fit. Recompose, condense, split, or resize the container.
+- Do not place consecutive `.slide` canvases directly against each other in browser preview.
 - Do not use decorative arrows, rings, tracks, or connectors without semantic meaning.
 - Do not claim arbitrary graphics, animations, canvas, filters, or videos are editable in PowerPoint.
