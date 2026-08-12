@@ -1,4 +1,4 @@
 interface:
-  display_name: "参考图生成逻辑型可编辑PPT"
-  short_description: "生成逻辑清晰、多页易浏览且结构可编辑的HTML与PPTX"
-  default_prompt: "Use $reference-html-pptx to design a polished multi-page HTML deck with clear page separation and readable information density, then export and verify a structurally editable PPTX."
+  display_name: "参考图生成高质感可编辑PPT"
+  short_description: "从内容逻辑、参考图视觉系统到可编辑PPTX的完整工作流"
+  default_prompt: "Use $reference-html-pptx to turn my slide copy and visual references into a polished multi-page HTML deck with a coherent visual system, then export and verify an editable PPTX."

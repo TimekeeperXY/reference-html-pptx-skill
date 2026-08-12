@@ -139,6 +139,12 @@ try {
         };
       });
 
+      const componentTypes = [...slide.querySelectorAll('[data-component-type]')]
+        .filter(visible).map((el) => el.getAttribute('data-component-type')).filter(Boolean);
+      const distinctComponentTypes = [...new Set(componentTypes)];
+      const primaryEmphasisCount = [...slide.querySelectorAll('[data-emphasis-level="primary"]')].filter(visible).length;
+      const secondaryEmphasisCount = [...slide.querySelectorAll('[data-emphasis-level="secondary"]')].filter(visible).length;
+
       const region = slide.querySelector('[data-slide-content]');
       let occupancy = null;
       let occupancyExempt = false;
@@ -167,6 +173,9 @@ try {
         textIssues,
         overflowIssues,
         cards,
+        distinctComponentTypes,
+        primaryEmphasisCount,
+        secondaryEmphasisCount,
         occupancy,
         occupancyExempt,
         slideOverflow: slideStyle.overflow,
@@ -198,6 +207,10 @@ try {
       if (card.height > 120 && card.utilization < 0.25) result.errors.push(`${prefix}: ${card.id} uses only ${Math.round(card.utilization * 100)}% of its usable vertical space.`);
       else if (card.utilization < 0.45) result.warnings.push(`${prefix}: ${card.id} content utilization is ${Math.round(card.utilization * 100)}%; review excess internal whitespace.`);
     }
+    if (item.distinctComponentTypes.length > 3) result.warnings.push(`${prefix}: ${item.distinctComponentTypes.length} marked component families may create visual vocabulary overload (${item.distinctComponentTypes.join(', ')}).`);
+    if (item.primaryEmphasisCount === 0) result.warnings.push(`${prefix}: no [data-emphasis-level="primary"] focal system is marked.`);
+    if (item.primaryEmphasisCount > 2) result.warnings.push(`${prefix}: ${item.primaryEmphasisCount} primary emphasis objects may compete for attention.`);
+    if (item.secondaryEmphasisCount > 4) result.warnings.push(`${prefix}: ${item.secondaryEmphasisCount} secondary emphasis objects may dilute the hierarchy.`);
     if (item.occupancy !== null && !item.occupancyExempt) {
       if (item.occupancy < 0.55) result.warnings.push(`${prefix}: main content-block bounds occupy only ${Math.round(item.occupancy * 100)}% of the marked content region.`);
       if (item.occupancy > 0.92) result.warnings.push(`${prefix}: main content-block bounds occupy ${Math.round(item.occupancy * 100)}% of the marked content region; review crowding.`);
@@ -215,6 +228,9 @@ try {
       textIssueCount: item.textIssues.length,
       overflowIssueCount: item.overflowIssues.length,
       markedCardCount: item.cards.length,
+      componentTypes: item.distinctComponentTypes,
+      primaryEmphasisCount: item.primaryEmphasisCount,
+      secondaryEmphasisCount: item.secondaryEmphasisCount,
       contentOccupancy: item.occupancy,
     });
   }

@@ -7,11 +7,11 @@ description: Build polished, logically structured 16:9 HTML presentation pages f
 
 ## Version
 
-Current design-workflow version: **2.1.0**.
+Current design-workflow version: **2.2.0**.
 
 Create slides with Codex's own content reasoning and HTML/CSS design ability. Optimize in this order:
 
-**conclusion → semantic relationships → grouping → hierarchy → layout → wireframe → visual design → PPTX annotation → dual-render QA**
+**conclusion → semantic relationships → grouping → hierarchy → layout → wireframe → visual tokens → emphasis and component strategy → visual craft → PPTX annotation → dual-render QA**
 
 Do not begin styling before the content model and layout rationale are clear.
 
@@ -33,7 +33,7 @@ Reuse the last confirmed background and reference language during the same task 
 3. Preserve the supplied background exactly as the bottom layer and stage it inside the output folder.
 4. Derive the visual system from the reference: palette, typography, components, spacing, shadows, icons, and rhythm. Match its design language, not its original subject matter or geometry.
 
-Read [references/design-reasoning.md](references/design-reasoning.md) before planning. Read [references/design-extraction.md](references/design-extraction.md) before styling. Read [references/preview-and-density.md](references/preview-and-density.md) before writing HTML. Read [references/html-contract.md](references/html-contract.md) only after the visual plan is frozen or when PPTX annotation begins.
+Read [references/design-reasoning.md](references/design-reasoning.md) before planning. Read [references/design-extraction.md](references/design-extraction.md) before styling. Read [references/visual-craft.md](references/visual-craft.md) after extracting the reference and before writing final CSS. Read [references/preview-and-density.md](references/preview-and-density.md) before writing HTML. Read [references/html-contract.md](references/html-contract.md) only after the visual plan is frozen or when PPTX annotation begins.
 
 ## Workflow
 
@@ -56,6 +56,9 @@ For every logical page, create `design-plan.json` in the output directory with:
 - `layoutFamily` and `primaryVisual`;
 - `densityIntent`: page type, intended content-region occupancy, minimum body size, and any justified density exemptions;
 - `referenceTraits`: the visual traits to preserve.
+- `visualTokens`: extracted color roles, type scale, radii, boundaries, shadows, icon language, and spacing rhythm;
+- `emphasisPlan`: one primary focus, secondary accents, and accent intensity;
+- `componentStrategy`: primary component types, card count, boundary methods, and deliberate exceptions.
 
 If the page answers multiple unrelated questions or needs more than three information levels, split it when allowed; otherwise prioritize one main argument and demote the rest to supporting regions. Normalize parallel labels into consistent noun or verb structures.
 
@@ -71,25 +74,33 @@ Map the semantic relationship to a suitable layout using `design-reasoning.md`. 
 
 Do not choose orbit, radial, timeline, matrix, or card-grid layouts unless the content relationship justifies them. Establish a 12-column grid or another explicit alignment system, title zone, content bounds, macro regions, and whitespace before styling.
 
-### 4. Design the HTML page
+Run `node scripts/audit-design-plan.mjs <output>/design-plan.json` before styling. Fix missing or contradictory decisions instead of silently inventing them in CSS.
+
+### 4. Freeze the visual system
+
+Translate the reference traits into reusable CSS variables and component rules. Define semantic color roles rather than isolated hex values. Give each component family one silhouette, one boundary method, one spacing rhythm, and one icon language. Plan where the accent appears before applying it.
+
+Use cards only for information that needs a meaningful boundary: conclusions, key metrics, comparison subjects, states, or reusable modules. Use proximity, alignment, whitespace, background zones, and restrained dividers for ordinary explanation. Limit the page to a small visual vocabulary; more component types do not create more hierarchy.
+
+### 5. Design the HTML page
 
 Create a self-contained `index.html` with one fixed 1600×900 `.slide[data-slide-index]` per logical page, wrapped by a preview-only `.slide-shell[data-slide-shell]`. Scale the complete slide for smaller screens; do not make internal typography or geometry viewport-responsive. Use large structures for major relationships, medium structures for modules, and small components for labels and details. Maintain one primary reading path; comparison pages may use two intentionally equal panels.
 
-Use hierarchy, alignment, distance, whitespace, and background regions before adding borders or cards. Avoid card-per-sentence layouts, nested cards, duplicate borders, and decoration without information value. Keep accent color scarce and purposeful. Mark informational cards with `data-density-card="true"`, the principal content region with `data-slide-content`, and its major occupied blocks with `data-content-block`. Apply exemptions only with a documented semantic reason.
+Use hierarchy, alignment, distance, whitespace, and background regions before adding borders or cards. Avoid card-per-sentence layouts, nested cards, duplicate borders, and decoration without information value. Keep accent color scarce and purposeful. Mark informational cards with `data-density-card="true"`, major component families with `data-component-type`, the primary focus with `data-emphasis-level="primary"`, the principal content region with `data-slide-content`, and its major occupied blocks with `data-content-block`. Apply exemptions only with a documented semantic reason.
 
-### 5. Run HTML visual QA
+### 6. Run HTML visual QA
 
 Run `scripts/inspect-slide-html.ps1`. It must produce one PNG per slide plus a continuous-scroll preview and audit page dimensions, separation, preview outline, scroll snapping, font floors, text overflow, and marked-card density. Inspect both the individual PNGs and the continuous preview at original detail. Apply the design acceptance gate in `design-reasoning.md`; fix logic, hierarchy, density, alignment, typography, page separation, or decoration failures before proceeding.
 
-Do not accept a page merely because it has no overflow. A page fails if the conclusion, reading path, relationship meaning, or primary hierarchy is unclear.
+Do not accept a page merely because it has no overflow. A page fails if the conclusion, reading path, relationship meaning, primary hierarchy, reference-derived visual grammar, emphasis control, or component consistency is unclear. Apply the visual-craft acceptance gate after the three-second test.
 
-### 6. Annotate for PPTX after design freeze
+### 7. Annotate for PPTX after design freeze
 
 Only after the HTML composition passes visual QA, add `data-pptx-shape` and `data-pptx-line-*` metadata to semantic cards, containers, nodes, matrix cells, axes, arrows, and connectors. Keep decorative gradients, glows, illustrations, and non-semantic ornaments unmarked and flattened.
 
 Re-render once after annotation to confirm that metadata did not change the HTML appearance. Follow `html-contract.md`; do not redesign the page around exporter limitations.
 
-### 7. Export and verify PPTX
+### 8. Export and verify PPTX
 
 Read and use the installed `export-editable-pptx` skill. Export with `.slide` as the selector. Verify the expected slide, text, shape, and line counts. For logic-heavy pages, zero editable shapes or zero editable lines is an automatic failure; target at least 90% native-editable coverage of semantic structures.
 
@@ -127,4 +138,7 @@ Report slide count, editable text-object count, editable shape-object count, edi
 - Do not shrink normal body copy below 16px to make it fit. Recompose, condense, split, or resize the container.
 - Do not place consecutive `.slide` canvases directly against each other in browser preview.
 - Do not use decorative arrows, rings, tracks, or connectors without semantic meaning.
+- Do not use shadow, border, glow, color fill, and accent stripe simultaneously on one ordinary component.
+- Do not mix outline, filled, 3D, emoji, and photographic icons at the same semantic level.
+- Do not turn every sentence into a card or every keyword into a badge.
 - Do not claim arbitrary graphics, animations, canvas, filters, or videos are editable in PowerPoint.
