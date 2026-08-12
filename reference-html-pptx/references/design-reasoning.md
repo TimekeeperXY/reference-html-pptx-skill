@@ -30,7 +30,19 @@ Record the reasoning artifact in this shape:
       "exceptions": [],
       "layoutFamily": "layered-flow",
       "primaryVisual": "the main process path",
-      "referenceTraits": []
+      "referenceTraits": [],
+      "densityIntent": {},
+      "visualTokens": {},
+      "emphasisPlan": {
+        "primary": "the main process path",
+        "secondary": [],
+        "accentIntensity": "low"
+      },
+      "componentStrategy": {
+        "primaryTypes": ["process-node", "evidence-row"],
+        "peerObjectCount": 5,
+        "boundaryMethods": ["background-zone", "divider"]
+      }
     }
   ]
 }
@@ -133,6 +145,8 @@ Extract the reference's visual grammar after the wireframe is chosen:
 
 Adapt these traits to the selected information structure. Never copy a radial structure merely because the reference contains circles.
 
+Freeze the extracted traits as visual tokens and define the emphasis and component strategy before polishing. Read `visual-craft.md`; do not allow late CSS improvisation to introduce unrelated radii, shadows, icon styles, or boundary effects.
+
 Use accent color for the conclusion, main path, key node, or important state. Do not apply it simultaneously to every title, border, arrow, icon, and ornament. Numeric color ratios are guidance, not a hard requirement.
 
 Prefer grouping by proximity, alignment, whitespace, and background zones. Use borders only when they clarify a real container or state.
@@ -150,6 +164,7 @@ A page must pass all hard gates:
 - **Restraint:** no unnecessary card-per-sentence pattern, nested borders, or semantic-looking decoration;
 - **Legibility:** text remains readable at 1600×900;
 - **Reference fit:** the visual language matches the reference without copying an unsuitable layout;
+- **Craft:** tokens, emphasis, components, boundaries, icons, and typography form one restrained visual system;
 - **Truthfulness:** all required facts remain and no unsupported claims were introduced.
 
 Use the three-second test: if a viewer cannot state the page's main point and reading direction after a quick glance, revise the structure rather than adding decoration.

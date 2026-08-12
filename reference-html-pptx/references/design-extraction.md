@@ -7,14 +7,19 @@ Extract the reference into a compact design system after the content model and w
 - Sample the primary accent, dark text, secondary text, card fill, border, and shadow tint.
 - Distinguish brand color from semantic colors.
 - Use the accent selectively for titles, step numbers, keywords, arrows, and thin rules.
+- Name every sampled color by role and record it in `visualTokens.colors`; do not scatter unrelated hex values through CSS.
 
 ## Components
 
 Identify the repeated unit: long information bar, floating card, numbered step, badge, chip, quote box, illustration platform, diagram node, or data tile. Preserve its visual grammar: geometry, radius, border, glow, icon position, and internal alignment.
 
+Identify the reference's primary boundary method and material behavior. Record whether components are separated mainly by whitespace, background zones, outlines, elevation, glass, or image planes.
+
 ## Typography
 
 Record title scale and weight, body scale, italic usage, keyword emphasis, line height, and alignment. Prefer installed system fonts when editable PPTX is required.
+
+Record icon language separately: outline, filled, duotone, 3D, photographic, or typographic. Do not infer that every component needs an icon.
 
 ## Composition
 
