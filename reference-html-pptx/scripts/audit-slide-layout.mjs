@@ -47,7 +47,12 @@ const executablePath = browserCandidates.find((candidate) => fs.existsSync(candi
 if (!executablePath) throw new Error('Microsoft Edge or Google Chrome was not found.');
 
 fs.mkdirSync(path.dirname(screenshot), { recursive: true });
-const browser = await chromium.launch({ executablePath, headless: true });
+// Agent/sandbox environments need --no-sandbox or Chromium's sandbox init crashes (empty output, exit 1).
+const browser = await chromium.launch({
+  executablePath,
+  headless: true,
+  args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-setuid-sandbox'],
+});
 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
 
 const result = {

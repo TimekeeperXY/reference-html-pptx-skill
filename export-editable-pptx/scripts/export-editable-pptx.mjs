@@ -4,6 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import PptxGenJS from 'pptxgenjs';
+import JSZip from 'jszip';
 import { chromium } from 'playwright-core';
 
 const args = parseArgs(process.argv.slice(2));
@@ -35,6 +36,10 @@ try {
   let textObjects = 0;
   let shapeObjects = 0;
   let lineObjects = 0;
+  let svgObjects = 0;
+  // 渐变填充的 shape：pptxgenjs 只支持 solid fill，这里记录形状在 slide XML 中的 <p:sp> 顺序，
+  // 导出完成后统一注入 gradFill（渐变颜色/色标在 PowerPoint 中仍可编辑）。
+  const gradientShapes = [];
 
   for (let index = 0; index < count; index++) {
     const data = await prepareSlide(page, selector, index);
@@ -44,15 +49,20 @@ try {
     const slide = pptx.addSlide();
     slide.background = { color: 'FFFFFF' };
     slide.addImage({ path: imagePath, x: 0, y: 0, w: 13.333, h: 7.5 });
-    for (const item of data.shapes) {
+    for (let shapeIdx = 0; shapeIdx < data.shapes.length; shapeIdx++) {
+      const item = data.shapes[shapeIdx];
       const x = clamp((item.x / data.clip.width) * 13.333, 0, 13.333);
       const y = clamp((item.y / data.clip.height) * 7.5, 0, 7.5);
       const w = clamp((item.w / data.clip.width) * 13.333, 0.02, 13.333 - x);
       const h = clamp((item.h / data.clip.height) * 7.5, 0.02, 7.5 - y);
       const shapeType = resolveShapeType(pptx, item.type);
+      // 渐变：先以首个色标作占位 solid fill（视觉兜底），后处理阶段再注入 gradFill。
+      const fillColor = item.gradient ? item.gradient.colors[0] : item.fill;
+      const fillTransparency = item.gradient ? 0 : item.fillTransparency;
+      if (item.gradient) gradientShapes.push({ slideIndex: index, spIndex: shapeIdx, gradient: item.gradient });
       const shapeOptions = {
         x, y, w, h,
-        fill: { color: item.fill, transparency: item.fillTransparency },
+        fill: { color: fillColor, transparency: fillTransparency },
         line: { color: item.line, transparency: item.lineTransparency, width: Math.max(0.1, item.lineWidth * item.slideScaleX * (13.333 * 72 / data.clip.width)) },
       };
       if (item.shadow) shapeOptions.shadow = { type: 'outer', color: item.shadowColor, opacity: item.shadowOpacity, blur: item.shadowBlur, angle: 45, distance: item.shadowDistance };
@@ -74,6 +84,15 @@ try {
       if (item.endArrowType) line.endArrowType = item.endArrowType;
       slide.addShape(pptx.ShapeType.line, { x, y, w, h, line });
       lineObjects++;
+    }
+    for (const item of data.svgs) {
+      const x = clamp((item.x / data.clip.width) * 13.333, 0, 13.333);
+      const y = clamp((item.y / data.clip.height) * 7.5, 0, 7.5);
+      const w = clamp((item.w / data.clip.width) * 13.333, 0.02, 13.333 - x);
+      const h = clamp((item.h / data.clip.height) * 7.5, 0.02, 7.5 - y);
+      const dataUri = `data:image/svg+xml;base64,${Buffer.from(item.svgMarkup, 'utf8').toString('base64')}`;
+      slide.addImage({ data: dataUri, x, y, w, h });
+      svgObjects++;
     }
     for (const item of data.texts) {
       // CSS font sizes are expressed in layout pixels, not PowerPoint points.
@@ -117,11 +136,21 @@ try {
 
   fs.mkdirSync(outDir, { recursive: true });
   await pptx.writeFile({ fileName: path.resolve(args.output) });
-  fs.rmSync(tempDir, { recursive: true, force: true });
+  // 后处理：pptxgenjs 无渐变 API，把记录到的渐变 shape 的 solidFill 替换为 gradFill
+  if (gradientShapes.length) await injectGradientFills(path.resolve(args.output), gradientShapes);
   console.log(`PPTX exported: ${path.resolve(args.output)}`);
-  console.log(`Slides: ${count}; editable text objects: ${textObjects}; editable shape objects: ${shapeObjects}; editable line objects: ${lineObjects}; mode: hybrid-editable`);
+  console.log(`Slides: ${count}; editable text objects: ${textObjects}; editable shape objects: ${shapeObjects}; editable line objects: ${lineObjects}; SVG image objects: ${svgObjects}; mode: hybrid-editable`);
+  // Best-effort temp cleanup. A sandbox safe-delete hook can make fs.rmSync throw (genie-trash
+  // ETIMEDOUT); that must never mask a successful export, so swallow it and warn instead.
+  try { fs.rmSync(tempDir, { recursive: true, force: true }); }
+  catch (e) { console.warn(`temp cleanup skipped (non-fatal): ${e.message}`); }
 } finally {
-  await browser.close().catch(() => {});
+  // Agent/sandbox gotcha: browser.close() can hang indefinitely in some sandboxed Chromium builds.
+  // The PPTX is already written above, so cap the close with a timeout race and never block delivery.
+  await Promise.race([
+    browser.close().catch(() => {}),
+    new Promise(resolve => setTimeout(resolve, 2000)),
+  ]);
   if (server) await new Promise(resolve => server.close(resolve));
 }
 
@@ -140,6 +169,28 @@ async function prepareSlide(page, selector, index) {
         el.style.setProperty('opacity', '1', 'important');
       }
     });
+    // Capture every slide at the viewport origin instead of expanding Chromium to the
+    // height of the whole stacked deck. This stays stable for long presentations.
+    const shell = target.closest('[data-slide-shell]');
+    if (shell) {
+      window.__editablePptxShellRestore = { el: shell, style: shell.getAttribute('style') };
+      shell.style.setProperty('position', 'fixed', 'important');
+      shell.style.setProperty('left', '0', 'important');
+      shell.style.setProperty('top', '0', 'important');
+      shell.style.setProperty('width', '1600px', 'important');
+      shell.style.setProperty('height', '900px', 'important');
+      shell.style.setProperty('transform', 'none', 'important');
+      shell.style.setProperty('z-index', '2147483647', 'important');
+    } else {
+      // Generic decks may expose slides directly without a data-slide-shell wrapper.
+      // Fix the active slide itself to the origin so later stacked pages are capturable too.
+      target.style.setProperty('position', 'fixed', 'important');
+      target.style.setProperty('z-index', '2147483647', 'important');
+    }
+    target.style.setProperty('--slide-scale', '1', 'important');
+    target.style.setProperty('transform', 'none', 'important');
+    target.style.setProperty('left', '0', 'important');
+    target.style.setProperty('top', '0', 'important');
     const rect = target.getBoundingClientRect();
     const slideScaleX = target.offsetWidth > 0 ? rect.width / target.offsetWidth : 1;
     const slideScaleY = target.offsetHeight > 0 ? rect.height / target.offsetHeight : 1;
@@ -158,6 +209,38 @@ async function prepareSlide(page, selector, index) {
       const parts = text.match(/[\d.]+/g)?.slice(0, 3).map(Number) || [];
       return parts.length === 3 ? parts.map(x => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0')).join('').toUpperCase() : fallback.replace('#', '').toUpperCase();
     };
+    // 解析 data-pptx-fill-gradient："linear:135:#A855F7:#7C3AED" 或 "radial:#FFFFFF:#F5F3FF"
+    const parseGradient = (attr) => {
+      if (!attr) return null;
+      const parts = attr.split(':').map(s => s.trim());
+      const type = parts[0].toLowerCase();
+      if (type !== 'linear' && type !== 'radial') return null;
+      let angle = 0;
+      let startIdx = 1;
+      if (type === 'linear' && /^-?\d+$/.test(parts[1])) { angle = Number(parts[1]); startIdx = 2; }
+      const colors = parts.slice(startIdx)
+        .map(c => c.replace('#', '').trim())
+        .filter(c => /^[0-9a-f]{6}$/i.test(c))
+        .map(c => c.toUpperCase());
+      if (colors.length < 2) return null;
+      return { type, angle, colors };
+    };
+    // 从 CSS box-shadow 第一层推断外阴影（无显式 data-pptx-shadow 时兜底）
+    const parseBoxShadow = (value) => {
+      if (!value || value === 'none') return null;
+      const colorMatch = value.match(/(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\))/);
+      if (!colorMatch) return null;
+      const numericPart = value.slice(0, colorMatch.index);
+      const nums = (numericPart.match(/[-+]?\d*\.?\d+/g) || []).map(Number);
+      const offX = nums[0] || 0;
+      const offY = nums[1] || 0;
+      return {
+        colorHex: colorHex(colorMatch[0], '53677A'),
+        opacity: colorAlpha(colorMatch[0]),
+        blur: Math.max(0, nums[2] || 3),
+        distance: Math.max(0.5, Math.sqrt(offX * offX + offY * offY)),
+      };
+    };
     const shapes = [...target.querySelectorAll('[data-pptx-shape]')].map(el => {
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
@@ -171,6 +254,23 @@ async function prepareSlide(page, selector, index) {
       const type = !typeValue || normalizedType === 'auto'
         ? (radius >= Math.min(r.width, r.height) * 0.45 ? 'ellipse' : radius > 1 ? 'roundRect' : 'rect')
         : normalizedType === 'roundrect' ? 'roundRect' : typeValue;
+      // 外阴影：显式 data-pptx-shadow 优先，否则从 CSS box-shadow 推断
+      const shadowAttr = el.getAttribute('data-pptx-shadow');
+      const explicitShadow = shadowAttr === 'true' || shadowAttr === 'false';
+      const inferred = explicitShadow ? null : parseBoxShadow(cs.boxShadow);
+      const shadow = explicitShadow ? shadowAttr === 'true' : !!inferred;
+      const shadowColor = explicitShadow
+        ? (el.getAttribute('data-pptx-shadow-color') || '#53677A').replace('#', '').toUpperCase()
+        : (inferred ? inferred.colorHex : '53677A');
+      const shadowOpacity = explicitShadow
+        ? Number(el.getAttribute('data-pptx-shadow-opacity') || 0.16)
+        : (inferred ? inferred.opacity : 0.16);
+      const shadowBlur = explicitShadow
+        ? Number(el.getAttribute('data-pptx-shadow-blur') || 3)
+        : (inferred ? inferred.blur : 3);
+      const shadowDistance = explicitShadow
+        ? Number(el.getAttribute('data-pptx-shadow-distance') || 1.2)
+        : (inferred ? inferred.distance : 1.2);
       return {
         type, x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height,
         fill: colorHex(fillValue, el.getAttribute('data-pptx-fill') || '#FFFFFF'),
@@ -178,11 +278,8 @@ async function prepareSlide(page, selector, index) {
         line: colorHex(lineValue, el.getAttribute('data-pptx-line') || '#FFFFFF'),
         lineTransparency: Math.round(100 - Math.max(0, Math.min(100, lineOpacity))),
         lineWidth: parseFloat(cs.borderTopWidth) || 0.1,
-        shadow: el.getAttribute('data-pptx-shadow') === 'true',
-        shadowColor: (el.getAttribute('data-pptx-shadow-color') || '#53677A').replace('#', '').toUpperCase(),
-        shadowOpacity: Number(el.getAttribute('data-pptx-shadow-opacity') || 0.16),
-        shadowBlur: Number(el.getAttribute('data-pptx-shadow-blur') || 3),
-        shadowDistance: Number(el.getAttribute('data-pptx-shadow-distance') || 1.2),
+        gradient: parseGradient(el.getAttribute('data-pptx-fill-gradient')),
+        shadow, shadowColor, shadowOpacity, shadowBlur, shadowDistance,
         slideScaleX, slideScaleY
       };
     }).filter(x => x.w > 1 && x.h > 1 && x.x + x.w > 0 && x.y + x.h > 0 && x.x < rect.width && x.y < rect.height);
@@ -229,6 +326,86 @@ async function prepareSlide(page, selector, index) {
     });
     const textNodes = [];
     while (walker.nextNode()) textNodes.push(walker.currentNode);
+    const svgs = [...target.querySelectorAll('[data-pptx-svg]')].map(el => {
+      const svg = el.tagName.toLowerCase() === 'svg' ? el : el.querySelector('svg');
+      if (!svg) return null;
+      const r = svg.getBoundingClientRect();
+      const copyStyles = (source, clone) => {
+        const cs = getComputedStyle(source);
+        const style = [
+          ['fill', cs.fill], ['fill-opacity', cs.fillOpacity], ['fill-rule', cs.fillRule],
+          ['clip-rule', cs.clipRule], ['stroke', cs.stroke], ['stroke-opacity', cs.strokeOpacity],
+          ['stroke-width', cs.strokeWidth], ['stroke-linecap', cs.strokeLinecap],
+          ['stroke-linejoin', cs.strokeLinejoin], ['stroke-dasharray', cs.strokeDasharray],
+          ['stroke-miterlimit', cs.strokeMiterlimit], ['opacity', cs.opacity]
+        ].filter(([, value]) => value && value !== 'none' && value !== 'normal').map(([key, value]) => `${key}:${value}`).join(';');
+        if (style) clone.setAttribute('style', style);
+        [...source.children].forEach((child, index) => {
+          const childClone = clone.children[index];
+          if (childClone) copyStyles(child, childClone);
+        });
+      };
+      const clone = svg.cloneNode(true);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      copyStyles(svg, clone);
+      // Resolve shared <use href="#id"> references so the exported SVG is self-contained.
+      // PowerPoint's SVG importer does not reliably resolve external <use> refs, so expand
+      // them into concrete geometry, then merge referenced <defs> (gradients, filters, etc).
+      const expandUses = (root) => {
+        const uses = [...root.querySelectorAll('use')];
+        for (const use of uses) {
+          const href = (use.getAttribute('href') || use.getAttribute('xlink:href') || '').trim();
+          if (!href.startsWith('#')) continue;
+          const ref = document.getElementById(href.slice(1));
+          if (!ref) continue;
+          let replacement;
+          if (ref.tagName.toLowerCase() === 'symbol') {
+            // A symbol owns its own viewport. Preserve that viewport in a nested SVG so
+            // a 24×24 icon scales correctly when <use> renders it at another size.
+            replacement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            const viewBox = ref.getAttribute('viewBox');
+            if (viewBox) replacement.setAttribute('viewBox', viewBox);
+            replacement.setAttribute('preserveAspectRatio', use.getAttribute('preserveAspectRatio') || ref.getAttribute('preserveAspectRatio') || 'xMidYMid meet');
+            replacement.setAttribute('x', use.getAttribute('x') || '0');
+            replacement.setAttribute('y', use.getAttribute('y') || '0');
+            replacement.setAttribute('width', use.getAttribute('width') || '100%');
+            replacement.setAttribute('height', use.getAttribute('height') || '100%');
+            [...ref.children].forEach(c => replacement.appendChild(c.cloneNode(true)));
+          } else {
+            replacement = ref.cloneNode(true);
+            ['x', 'y', 'width', 'height'].forEach(a => { const v = use.getAttribute(a); if (v != null) replacement.setAttribute(a, v); });
+          }
+          // Preserve presentation and transform attributes applied directly to <use>.
+          for (const attr of [...use.attributes]) {
+            if (['href', 'xlink:href', 'x', 'y', 'width', 'height', 'preserveAspectRatio'].includes(attr.name)) continue;
+            replacement.setAttribute(attr.name, attr.value);
+          }
+          use.replaceWith(replacement);
+          expandUses(replacement);
+        }
+      };
+      const mergeDefs = (root) => {
+        let rootDefs = root.querySelector('defs');
+        if (!rootDefs) {
+          rootDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+          root.insertBefore(rootDefs, root.firstChild);
+        }
+        const seen = new Set();
+        root.querySelectorAll('[id]').forEach(node => seen.add(node.getAttribute('id')));
+        document.querySelectorAll('svg defs').forEach(src => {
+          [...src.children].forEach(child => {
+            const id = child.getAttribute('id');
+            if (id && seen.has(id)) return;
+            if (id) seen.add(id);
+            rootDefs.appendChild(child.cloneNode(true));
+          });
+        });
+      };
+      expandUses(clone);
+      mergeDefs(clone);
+      return { x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height, svgMarkup: new XMLSerializer().serializeToString(clone) };
+    }).filter(item => item && item.w > 1 && item.h > 1 && item.x + item.w > 0 && item.y + item.h > 0 && item.x < rect.width && item.y < rect.height);
     const texts = textNodes.map(node => {
       const el = node.parentElement;
       const range = document.createRange();
@@ -250,11 +427,12 @@ async function prepareSlide(page, selector, index) {
     [...new Set(textNodes.map(node => node.parentElement))].forEach(el => el.classList.add('__editable_pptx_text'));
     target.querySelectorAll('[data-pptx-shape]').forEach(el => el.classList.add('__editable_pptx_shape'));
     target.querySelectorAll('[data-pptx-line-shape]').forEach(el => el.classList.add('__editable_pptx_line'));
+    target.querySelectorAll('[data-pptx-svg]').forEach(el => el.classList.add('__editable_pptx_svg'));
     const style = document.createElement('style');
     style.id = '__editable_pptx_hide_text';
-    style.textContent = `.__editable_pptx_text{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important} .__editable_pptx_text::before,.__editable_pptx_text::after{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important} .__editable_pptx_shape{background:transparent!important;background-image:none!important;border-color:transparent!important;box-shadow:none!important} .__editable_pptx_line{background:transparent!important;border-color:transparent!important;box-shadow:none!important;color:transparent!important} svg text{fill:transparent!important;stroke:transparent!important}`;
+    style.textContent = `.__editable_pptx_text{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important} .__editable_pptx_text::before,.__editable_pptx_text::after{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important} .__editable_pptx_shape{background:transparent!important;background-image:none!important;border-color:transparent!important;box-shadow:none!important} .__editable_pptx_line{background:transparent!important;border-color:transparent!important;box-shadow:none!important;color:transparent!important} .__editable_pptx_svg{visibility:hidden!important}`;
     document.head.appendChild(style);
-    return { clip: { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: rect.width, height: rect.height }, texts, shapes, lines };
+    return { clip: { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: rect.width, height: rect.height }, texts, shapes, lines, svgs };
   }, { selector, index });
 }
 
@@ -264,10 +442,16 @@ async function restoreSlide(page) {
     document.querySelectorAll('.__editable_pptx_text').forEach(el => el.classList.remove('__editable_pptx_text'));
     document.querySelectorAll('.__editable_pptx_shape').forEach(el => el.classList.remove('__editable_pptx_shape'));
     document.querySelectorAll('.__editable_pptx_line').forEach(el => el.classList.remove('__editable_pptx_line'));
+    document.querySelectorAll('.__editable_pptx_svg').forEach(el => el.classList.remove('__editable_pptx_svg'));
     (window.__editablePptxRestore || []).forEach(({ el, style, hidden }) => {
       style == null ? el.removeAttribute('style') : el.setAttribute('style', style);
       el.hidden = hidden;
     });
+    if (window.__editablePptxShellRestore) {
+      const { el, style } = window.__editablePptxShellRestore;
+      style == null ? el.removeAttribute('style') : el.setAttribute('style', style);
+    }
+    delete window.__editablePptxShellRestore;
     delete window.__editablePptxRestore;
   });
 }
@@ -312,7 +496,13 @@ async function launchBrowser() {
   ].filter(Boolean);
   const executablePath = candidates.find(fs.existsSync);
   if (!executablePath) fail('Microsoft Edge or Google Chrome was not found.');
-  return chromium.launch({ executablePath, headless: true });
+  // Agent/sandbox environments (CodeBuddy/WorkBuddy sandbox, CI) need --no-sandbox or Chromium's
+  // sandbox init crashes and the process is killed with empty output. Safe for local headless use too.
+  return chromium.launch({
+    executablePath,
+    headless: true,
+    args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-setuid-sandbox'],
+  });
 }
 
 function parseArgs(argv) { const out = {}; for (let i=0;i<argv.length;i++) if (argv[i].startsWith('--')) out[argv[i].slice(2)] = argv[i+1]?.startsWith('--') ? true : argv[++i]; return out; }
@@ -334,3 +524,43 @@ function mapDash(value='solid') {
 function opacityToTransparency(v) { return Math.round((1 - Math.max(0, Math.min(1, v))) * 100); }
 function clamp(v,min,max) { return Math.max(min,Math.min(max,v)); }
 function fail(message) { console.error(message); process.exit(1); }
+
+// 把渐变 shape 的占位 solidFill 替换为原生 gradFill（渐变颜色/色标在 PowerPoint 中仍可编辑）。
+async function injectGradientFills(outputPath, gradientShapes) {
+  const zip = await JSZip.loadAsync(fs.readFileSync(outputPath));
+  const bySlide = new Map();
+  for (const g of gradientShapes) {
+    if (!bySlide.has(g.slideIndex)) bySlide.set(g.slideIndex, []);
+    bySlide.get(g.slideIndex).push(g);
+  }
+  for (const [slideIndex, items] of bySlide) {
+    const file = `ppt/slides/slide${slideIndex + 1}.xml`;
+    const entry = zip.file(file);
+    if (!entry) continue;
+    let xml = await entry.async('string');
+    // 匹配完整 <p:sp>…</p:sp>（<p:spPr>/<p:spt> 等前缀被 (?=[\s>]) 排除）
+    const sps = [...xml.matchAll(/<p:sp(?=[\s>])[\s\S]*?<\/p:sp>/g)];
+    for (const item of items) {
+      const sp = sps[item.spIndex];
+      if (!sp) continue;
+      const original = sp[0];
+      const replaced = original.replace(/<a:solidFill(?:\s[^>]*)?>[\s\S]*?<\/a:solidFill>/, gradFillXml(item.gradient));
+      if (replaced !== original) xml = xml.replace(original, replaced);
+    }
+    zip.file(file, xml);
+  }
+  const out = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+  fs.writeFileSync(outputPath, out);
+}
+
+function gradFillXml(gradient) {
+  const stops = gradient.colors.map((c, i) => {
+    const pos = Math.round((i * 100000) / (gradient.colors.length - 1));
+    return `<a:gs pos="${pos}"><a:srgbClr val="${c}"/></a:gs>`;
+  }).join('');
+  if (gradient.type === 'radial') {
+    return `<a:gradFill rotWithShape="1"><a:gsLst>${stops}</a:gsLst><a:path path="circle"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path></a:gradFill>`;
+  }
+  const ang = Math.round(gradient.angle * 60000);
+  return `<a:gradFill rotWithShape="1"><a:gsLst>${stops}</a:gsLst><a:lin ang="${ang}" scaled="0"/></a:gradFill>`;
+}
