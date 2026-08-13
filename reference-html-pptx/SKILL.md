@@ -7,7 +7,7 @@ description: Build polished, logically structured 16:9 HTML presentation pages f
 
 ## Version
 
-Current design-workflow version: **2.2.0**.
+Current design-workflow version: **2.4.1**.
 
 Create slides with Codex's own content reasoning and HTML/CSS design ability. Optimize in this order:
 
@@ -30,7 +30,7 @@ Reuse the last confirmed background and reference language during the same task 
 
 1. Preserve user facts and required relationships. Do not invent claims, numbers, actors, or process steps.
 2. Clarify the page's intended conclusion and reorganize copy to make that conclusion understandable.
-3. Preserve the supplied background exactly as the bottom layer and stage it inside the output folder.
+3. Preserve the supplied background exactly as the bottom layer and stage it inside the output folder. **When the user provides a background image, you MUST use it verbatim** — copy it into `assets/` and place it as the slide's bottom layer (a real `<img class="slide-bg">` or `background-image: url(assets/...)`), never a hand-drawn CSS gradient. Derive accents, spacing, and ornament from it, but do not replace it. Only when no background image was supplied may you fall back to a generated gradient background.
 4. Derive the visual system from the reference: palette, typography, components, spacing, shadows, icons, and rhythm. Match its design language, not its original subject matter or geometry.
 
 Read [references/design-reasoning.md](references/design-reasoning.md) before planning. Read [references/design-extraction.md](references/design-extraction.md) before styling. Read [references/visual-craft.md](references/visual-craft.md) after extracting the reference and before writing final CSS. Read [references/preview-and-density.md](references/preview-and-density.md) before writing HTML. Read [references/html-contract.md](references/html-contract.md) only after the visual plan is frozen or when PPTX annotation begins.
@@ -39,7 +39,7 @@ Read [references/design-reasoning.md](references/design-reasoning.md) before pla
 
 ### 1. Inspect and stage inputs
 
-Inspect every image at original detail. Identify background versus design reference. Create a new output directory and copy all required local assets into `assets/`; never leave temporary clipboard paths in final HTML.
+Inspect every image at original detail. Identify background versus design reference. Create a new output directory and copy all required local assets into `assets/`; never leave temporary clipboard paths in final HTML. **When a background image is provided, stage it as `assets/background.<ext>` and reference it from the slide's bottom layer.**
 
 ### 2. Build the content model
 
@@ -88,9 +88,20 @@ Create a self-contained `index.html` with one fixed 1600×900 `.slide[data-slide
 
 Use hierarchy, alignment, distance, whitespace, and background regions before adding borders or cards. Avoid card-per-sentence layouts, nested cards, duplicate borders, and decoration without information value. Keep accent color scarce and purposeful. Mark informational cards with `data-density-card="true"`, major component families with `data-component-type`, the primary focus with `data-emphasis-level="primary"`, the principal content region with `data-slide-content`, and its major occupied blocks with `data-content-block`. Apply exemptions only with a documented semantic reason.
 
+### 5.5 Verify visual-QA capability (multimodal gate)
+
+Visual QA step 6's "human-eye" review depends on the model's multimodal (image-understanding) ability. Before running any QA screenshot, state plainly whether the current model can read images:
+
+1. **Declare capability.** Right after finishing the HTML, tell the user explicitly whether the running model supports multimodal image inspection. Never pretend to see a screenshot you cannot view.
+2. **Generate the preview before asking.** Run the automated HTML audit and produce the individual-page and continuous-scroll PNGs so the user has concrete evidence to inspect.
+3. **Branch on capability:**
+   - **Model supports multimodal** → inspect the PNGs, report the visual judgment, show the previews, and ask the user whether to continue with PPTX export.
+   - **Model does NOT support multimodal** → state that no subjective visual judgment was performed, report the structured audit results, show the previews, and recommend review with a model that supports image understanding.
+4. **Always wait for explicit confirmation before PPTX export.** Do not continue to steps 7–8 until the user approves the HTML preview. The only exception is when the user explicitly requested a no-confirmation or direct-export mode in the current request.
+
 ### 6. Run HTML visual QA
 
-Run `scripts/inspect-slide-html.ps1`. It must produce one PNG per slide plus a continuous-scroll preview and audit page dimensions, separation, preview outline, scroll snapping, font floors, text overflow, and marked-card density. Inspect both the individual PNGs and the continuous preview at original detail. Apply the design acceptance gate in `design-reasoning.md`; fix logic, hierarchy, density, alignment, typography, page separation, or decoration failures before proceeding.
+Run `scripts/inspect-slide-html.ps1` immediately after the capability declaration. It must produce one PNG per slide plus a continuous-scroll preview and audit page dimensions, separation, preview outline, scroll snapping, font floors, text overflow, and marked-card density. Inspect both the individual PNGs and the continuous preview at original detail only when the current model actually supports multimodal; otherwise rely on the structured audit output and let the user perform the subjective visual review. Apply the design acceptance gate in `design-reasoning.md`; fix logic, hierarchy, density, alignment, typography, page separation, or decoration failures before asking for export confirmation.
 
 Do not accept a page merely because it has no overflow. A page fails if the conclusion, reading path, relationship meaning, primary hierarchy, reference-derived visual grammar, emphasis control, or component consistency is unclear. Apply the visual-craft acceptance gate after the three-second test.
 
@@ -142,3 +153,16 @@ Report slide count, editable text-object count, editable shape-object count, edi
 - Do not mix outline, filled, 3D, emoji, and photographic icons at the same semantic level.
 - Do not turn every sentence into a card or every keyword into a badge.
 - Do not claim arbitrary graphics, animations, canvas, filters, or videos are editable in PowerPoint.
+
+## Agent / sandbox environment gotchas (CodeBuddy / WorkBuddy sandbox, CI)
+
+The visual-QA step (`scripts/inspect-slide-html.ps1` → `audit-slide-layout.mjs`) drives a headless Chromium. In sandboxed shells:
+
+1. **`chromium.launch` must pass `--no-sandbox` (plus `--disable-gpu --disable-dev-shm-usage`).** Without them Chromium's sandbox init crashes and the screenshot step fails with empty output / exit 1 (no per-slide PNG, no continuous preview). Already patched in `audit-slide-layout.mjs` — keep it patched if you re-edit. If screenshots silently fail, this is the first thing to check.
+2. **Invoke through the skill scripts, not by hand-rolling a browser call.** The `.ps1` wrapper is fine on a normal desktop; inside an agent sandbox run the underlying `.mjs` with `node` and a disabled sandbox so the browser process can spawn.
+
+### Recurring design-time pitfalls (caught while building real decks)
+
+3. **A user-supplied background image takes precedence over a generated gradient.** If the user provides a background image, stage it into `assets/` and use it as the exact bottom layer — do not silently substitute a CSS gradient. The "prefer a pure CSS gradient" advice applies **only when no background image was supplied**. AI-generated background images often bake a "AI生成" mark and random Chinese characters into the picture; when you generate a background yourself (no user image), inspect it at full detail first and reject any with text artifacts.
+4. **CSS specificity can collapse a `position:absolute` footer into normal flow.** A rule like `.slide > *:not(.slide-bg){position:relative}` (specificity 0,2,1) overrides a class rule such as `.src{position:absolute}` (0,1,0), so the footer drops out of its layer and stacks against the chip row, causing apparent "overlapping text". Exclude the footer class: `.slide > *:not(.slide-bg):not(.src)`. Always verify layered elements with a DOM-coordinate probe in addition to visual inspection; if the running model cannot inspect images, show the preview to the user and wait for confirmation.
+5. **Metric units wrap and look broken.** Short values like `4–15s` or `24 FPS` can break across lines. Add `white-space:nowrap` to the value element and keep the unit as an inline `<span>` with `vertical-align:bottom` rather than a superscript-like baseline shift.
