@@ -7,9 +7,11 @@ description: Convert HTML or browser-based slide decks into editable PowerPoint 
 
 ## Version
 
-Current export version: **2.4.1** (aligned with `reference-html-pptx` 2.4.1 — reliable per-slide capture, explicit JSZip dependency, and viewBox-aware SVG `<use>` expansion).
+Current export version: **2.5.0** (aligned with `reference-html-pptx` 2.5.0 — atomic editable objects, native doughnut charts, z-order reconstruction, gradient preservation, and viewBox-aware SVG `<use>` expansion).
 
-Convert a rendered HTML deck into a hybrid editable PPTX. Reconstruct visible text and explicitly marked structural graphics as native PowerPoint objects; preserve unsupported visuals as a text-and-structure-free background. Do not claim that animations, video, canvas, WebGL, CSS filters, or arbitrary graphics remain editable.
+Convert a rendered HTML deck into a hybrid editable PPTX. Reconstruct visible text, explicitly marked structural graphics, marked doughnut charts, and marked gradients as native PowerPoint objects; preserve unsupported visuals as a text-and-structure-free background. Do not claim that animations, video, canvas, WebGL, CSS filters, arbitrary graphics, or pixels already baked into a background image remain editable.
+
+Read [references/editable-object-contract.md](references/editable-object-contract.md) before annotating or auditing a deck. Its native/chart/SVG/raster levels and background-decomposition rule are mandatory.
 
 ## Workflow
 
@@ -44,20 +46,25 @@ Convert a rendered HTML deck into a hybrid editable PPTX. Reconstruct visible te
 ```
 
 6. Compare the PowerPoint-rendered PNG against the HTML screenshot. Reject the export if text is duplicated, unexpectedly wraps, changes scale materially, or overlaps adjacent elements. Read `references/compatibility.md` when explaining limitations or diagnosing fidelity.
-7. Run a structural editability gate. Count semantic HTML structures (cards/nodes/cells/badges and connectors/axes/arrows) and compare them with exporter totals. For diagram decks, reject any result with zero editable shapes or zero editable lines, and reject suspiciously low coverage (default threshold: 90% of semantic structural elements). Do not use visual fidelity as a substitute for editability.
+7. Run a structural editability gate. Count semantic HTML structures and compare them with exporter totals. For diagram decks, reject any result with zero editable shapes or zero editable lines, and reject suspiciously low coverage (default threshold: 90% of semantic structural elements). Require zero unsupported semantic objects. Do not use visual fidelity as a substitute for editability.
 
 The exporter extracts visible text nodes rather than contenteditable parent containers. Inline `<span>` and `<strong>` styling therefore remains editable without duplicating their parent text. Mark intentionally raster-only DOM text with `data-pptx-ignore="true"`; it will stay in the visual background and will not become an editable text box.
 
 To rebuild a simple container as a native PowerPoint shape, mark it explicitly:
 
 ```html
-<div data-pptx-shape="roundRect"
+<div data-pptx-render="native"
+     data-pptx-shape="roundRect"
      data-pptx-fill="#FFFFFF"
      data-pptx-fill-opacity="94"
-     data-pptx-line="#FFFFFF">...</div>
+     data-pptx-line="#FFFFFF"
+     data-pptx-role="card"
+     data-pptx-z="20">...</div>
 ```
 
 Supported `data-pptx-shape` values: `auto`, `rect`, `roundRect`, `ellipse`, `circle` (both map to a PowerPoint oval — use `circle` for round badges, dots, and number discs), or any PptxGenJS shape key such as `chevron`, `hexagon`, `diamond`, `arc`, `pie`, `donut`, `rightArrow`. `auto` infers rectangle, rounded rectangle, or ellipse from the computed border radius. A marked element is removed from the raster background before capture, preventing duplicate shapes.
+
+Mark every atomic primitive. Progress tracks and fills, overlapping brand circles, card borders, bottom bands, and status dots are separate shapes. Marking only their parent component is insufficient.
 
 Shape formatting (in addition to the single-color fill and outline):
 
@@ -78,12 +85,29 @@ Supported directions are `horizontal`, `vertical`, `up`, `down`, `diagonal`, and
 
 Do not use CSS pseudo-elements for logic arrows that must be editable. Replace `::before` or `::after` connectors with real DOM elements carrying `data-pptx-line-shape`. CSS borders used only as decoration may remain rasterized; structural dividers, timelines, arrows, and connectors must be marked.
 
+## Editable charts
+
+Use a native PowerPoint doughnut chart for percentage rings:
+
+```html
+<div data-pptx-render="chart"
+     data-pptx-chart="doughnut"
+     data-pptx-values="75,25"
+     data-pptx-labels="Complete,Remaining"
+     data-pptx-colors="#D00000,#F4D9D9"
+     data-pptx-hole-size="72"
+     data-pptx-first-slice-angle="270"
+     data-pptx-role="metric-chart"></div>
+```
+
+Keep center labels as separate DOM text. Exact CSS `conic-gradient` rings are not native charts and must be replaced or intentionally exported as SVG/raster.
+
 ## SVG icons and vector visuals
 
 Mark an inline SVG that should remain visible as its own vector image object:
 
 ```html
-<svg data-pptx-svg="true" viewBox="0 0 24 24" aria-hidden="true">
+<svg data-pptx-svg="true" data-pptx-render="svg" viewBox="0 0 24 24" aria-hidden="true">
   <path d="M4 12h16M12 4v16" fill="none" stroke="#BB1C21" stroke-width="1.75" stroke-linecap="round"/>
 </svg>
 ```
@@ -94,13 +118,13 @@ SVGs that reference a shared `<symbol>` via `<use href="#id">` are supported: at
 
 ### Required pre-export audit
 
-Before running the exporter, inspect the source for `data-pptx-shape` and `data-pptx-line-shape`. A logic-heavy deck must contain both. If ordinary CSS classes such as `.card`, `.node`, `.axis`, `.connector`, `.arrow`, `.ring`, or `.matrixCell` carry semantic structure but lack metadata, stop and annotate them first. After export, treat the counts as test assertions, not informational statistics.
+Before running the exporter, inspect the source for native shapes, lines, charts, SVGs, and explicit raster objects. A logic-heavy deck must contain native shapes and lines. If ordinary CSS classes such as `.card`, `.node`, `.axis`, `.connector`, `.arrow`, `.ring`, `.track`, `.fill`, or `.matrixCell` carry semantic structure but lack metadata, stop and annotate them first. Background-image ornaments cannot be annotated in place; decompose them into a clean base image plus DOM primitives. After export, treat the counts as test assertions, not informational statistics.
 
 ## Output contract
 
 - Return an absolute path to the generated `.pptx`.
-- Report the number of slides, editable text objects, editable shape objects, editable line objects, and SVG image objects from the exporter output.
-- Say "hybrid editable PPTX": visible text and marked structures are editable, marked SVGs remain vector image objects, and other complex visuals are retained in a background image.
+- Report slides, editable text objects, editable shape objects, editable line objects, editable chart objects, SVG image objects, intentional raster-only objects, unsupported semantic objects, and semantic editability coverage.
+- Say "hybrid editable PPTX": visible text, marked native structures, and marked charts are editable; marked SVGs remain vector image objects; explicitly raster or unsupported visuals remain in the background image.
 - If fonts differ on the destination machine, warn that PowerPoint may substitute them.
 - Never copy or invoke Dashi PPT's proprietary `html-deck-to-pptx` package from this skill.
 

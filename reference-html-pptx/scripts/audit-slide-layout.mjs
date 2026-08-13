@@ -150,6 +150,42 @@ try {
       const primaryEmphasisCount = [...slide.querySelectorAll('[data-emphasis-level="primary"]')].filter(visible).length;
       const secondaryEmphasisCount = [...slide.querySelectorAll('[data-emphasis-level="secondary"]')].filter(visible).length;
 
+      const semanticEls = [...slide.querySelectorAll('[data-pptx-semantic="true"],[data-pptx-role]')].filter(visible);
+      const editabilityIssues = [];
+      const editabilityWarnings = [];
+      const editability = { semantic: semanticEls.length, native: 0, chart: 0, svg: 0, raster: 0, unsupported: 0 };
+      for (const el of semanticEls) {
+        const explicit = (el.getAttribute('data-pptx-render') || '').trim().toLowerCase();
+        const inferred = el.hasAttribute('data-pptx-chart') ? 'chart'
+          : el.hasAttribute('data-pptx-svg') ? 'svg'
+          : (el.hasAttribute('data-pptx-shape') || el.hasAttribute('data-pptx-line-shape')) ? 'native' : '';
+        const mode = explicit || inferred;
+        const label = el.getAttribute('data-pptx-role') || el.id || el.className || el.tagName.toLowerCase();
+        if (!['native', 'chart', 'svg', 'raster'].includes(mode)) {
+          editability.unsupported++;
+          editabilityIssues.push(`${label}: semantic object has no valid data-pptx-render classification.`);
+          continue;
+        }
+        editability[mode]++;
+        if (mode === 'native' && !el.hasAttribute('data-pptx-shape') && !el.hasAttribute('data-pptx-line-shape')) {
+          editabilityIssues.push(`${label}: native object has neither data-pptx-shape nor data-pptx-line-shape.`);
+        }
+        if (mode === 'chart' && !el.hasAttribute('data-pptx-chart')) editabilityIssues.push(`${label}: chart object lacks data-pptx-chart.`);
+        if (mode === 'svg' && !el.hasAttribute('data-pptx-svg')) editabilityIssues.push(`${label}: SVG object lacks data-pptx-svg.`);
+        const cs = getComputedStyle(el);
+        if (mode === 'native' && cs.backgroundImage && cs.backgroundImage !== 'none') {
+          editabilityWarnings.push(`${label}: native object uses CSS background-image/gradient; PowerPoint will use the explicit data-pptx-fill fallback.`);
+        }
+        if (mode === 'native') {
+          for (const pseudo of ['::before', '::after']) {
+            const ps = getComputedStyle(el, pseudo);
+            if (ps.content && !['none', 'normal', '""'].includes(ps.content) && ps.display !== 'none' && ps.visibility !== 'hidden') {
+              editabilityWarnings.push(`${label}: visible ${pseudo} decoration is not independently editable; replace it with an annotated DOM element.`);
+            }
+          }
+        }
+      }
+
       const region = slide.querySelector('[data-slide-content]');
       let occupancy = null;
       let occupancyExempt = false;
@@ -181,6 +217,9 @@ try {
         distinctComponentTypes,
         primaryEmphasisCount,
         secondaryEmphasisCount,
+        editability,
+        editabilityIssues,
+        editabilityWarnings,
         occupancy,
         occupancyExempt,
         slideOverflow: slideStyle.overflow,
@@ -216,6 +255,12 @@ try {
     if (item.primaryEmphasisCount === 0) result.warnings.push(`${prefix}: no [data-emphasis-level="primary"] focal system is marked.`);
     if (item.primaryEmphasisCount > 2) result.warnings.push(`${prefix}: ${item.primaryEmphasisCount} primary emphasis objects may compete for attention.`);
     if (item.secondaryEmphasisCount > 4) result.warnings.push(`${prefix}: ${item.secondaryEmphasisCount} secondary emphasis objects may dilute the hierarchy.`);
+    for (const issue of item.editabilityIssues) result.errors.push(`${prefix}: ${issue}`);
+    for (const warning of item.editabilityWarnings) result.warnings.push(`${prefix}: ${warning}`);
+    if (item.editability.semantic > 0) {
+      const nativeCoverage = (item.editability.native + item.editability.chart) / item.editability.semantic;
+      if (nativeCoverage < 0.9) result.warnings.push(`${prefix}: native semantic editability coverage is ${Math.round(nativeCoverage * 100)}%; target is at least 90% unless SVG/raster levels were explicitly accepted.`);
+    }
     if (item.occupancy !== null && !item.occupancyExempt) {
       if (item.occupancy < 0.55) result.warnings.push(`${prefix}: main content-block bounds occupy only ${Math.round(item.occupancy * 100)}% of the marked content region.`);
       if (item.occupancy > 0.92) result.warnings.push(`${prefix}: main content-block bounds occupy ${Math.round(item.occupancy * 100)}% of the marked content region; review crowding.`);
@@ -236,6 +281,7 @@ try {
       componentTypes: item.distinctComponentTypes,
       primaryEmphasisCount: item.primaryEmphasisCount,
       secondaryEmphasisCount: item.secondaryEmphasisCount,
+      editability: item.editability,
       contentOccupancy: item.occupancy,
     });
   }

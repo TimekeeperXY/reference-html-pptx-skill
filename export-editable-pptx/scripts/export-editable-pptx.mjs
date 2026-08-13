@@ -37,6 +37,11 @@ try {
   let shapeObjects = 0;
   let lineObjects = 0;
   let svgObjects = 0;
+  let chartObjects = 0;
+  let rasterOnlyObjects = 0;
+  let semanticObjects = 0;
+  let semanticRebuiltObjects = 0;
+  let unsupportedSemanticObjects = 0;
   // 渐变填充的 shape：pptxgenjs 只支持 solid fill，这里记录形状在 slide XML 中的 <p:sp> 顺序，
   // 导出完成后统一注入 gradFill（渐变颜色/色标在 PowerPoint 中仍可编辑）。
   const gradientShapes = [];
@@ -49,8 +54,17 @@ try {
     const slide = pptx.addSlide();
     slide.background = { color: 'FFFFFF' };
     slide.addImage({ path: imagePath, x: 0, y: 0, w: 13.333, h: 7.5 });
-    for (let shapeIdx = 0; shapeIdx < data.shapes.length; shapeIdx++) {
-      const item = data.shapes[shapeIdx];
+    const objects = [
+      ...data.shapes.map(item => ({ kind: 'shape', item })),
+      ...data.lines.map(item => ({ kind: 'line', item })),
+      ...data.charts.map(item => ({ kind: 'chart', item })),
+      ...data.svgs.map(item => ({ kind: 'svg', item })),
+      ...data.texts.map(item => ({ kind: 'text', item })),
+    ].sort((a, b) => a.item.z - b.item.z || a.item.order - b.item.order);
+    let shapeIdx = 0;
+    for (const object of objects) {
+      const item = object.item;
+      if (object.kind === 'shape') {
       const x = clamp((item.x / data.clip.width) * 13.333, 0, 13.333);
       const y = clamp((item.y / data.clip.height) * 7.5, 0, 7.5);
       const w = clamp((item.w / data.clip.width) * 13.333, 0.02, 13.333 - x);
@@ -59,17 +73,22 @@ try {
       // 渐变：先以首个色标作占位 solid fill（视觉兜底），后处理阶段再注入 gradFill。
       const fillColor = item.gradient ? item.gradient.colors[0] : item.fill;
       const fillTransparency = item.gradient ? 0 : item.fillTransparency;
-      if (item.gradient) gradientShapes.push({ slideIndex: index, spIndex: shapeIdx, gradient: item.gradient });
+      if (item.gradient) gradientShapes.push({ slideIndex: index, spIndex: shapeIdx, name: item.objectName, gradient: item.gradient });
       const shapeOptions = {
         x, y, w, h,
         fill: { color: fillColor, transparency: fillTransparency },
         line: { color: item.line, transparency: item.lineTransparency, width: Math.max(0.1, item.lineWidth * item.slideScaleX * (13.333 * 72 / data.clip.width)) },
+        objectName: item.objectName,
+        rotate: item.rotation || 0,
+        flipH: item.flipH,
+        flipV: item.flipV,
       };
+      if (Number.isFinite(item.arcThicknessRatio)) shapeOptions.arcThicknessRatio = item.arcThicknessRatio;
       if (item.shadow) shapeOptions.shadow = { type: 'outer', color: item.shadowColor, opacity: item.shadowOpacity, blur: item.shadowBlur, angle: 45, distance: item.shadowDistance };
       slide.addShape(shapeType, shapeOptions);
       shapeObjects++;
-    }
-    for (const item of data.lines) {
+        shapeIdx++;
+      } else if (object.kind === 'line') {
       const x = clamp((item.x / data.clip.width) * 13.333, 0, 13.333);
       const y = clamp((item.y / data.clip.height) * 7.5, 0, 7.5);
       const w = (item.w / data.clip.width) * 13.333;
@@ -84,8 +103,22 @@ try {
       if (item.endArrowType) line.endArrowType = item.endArrowType;
       slide.addShape(pptx.ShapeType.line, { x, y, w, h, line });
       lineObjects++;
-    }
-    for (const item of data.svgs) {
+      } else if (object.kind === 'chart') {
+        const x = clamp((item.x / data.clip.width) * 13.333, 0, 13.333);
+        const y = clamp((item.y / data.clip.height) * 7.5, 0, 7.5);
+        const w = clamp((item.w / data.clip.width) * 13.333, 0.02, 13.333 - x);
+        const h = clamp((item.h / data.clip.height) * 7.5, 0.02, 7.5 - y);
+        const chartType = pptx.ChartType[item.chartType] || pptx.ChartType.doughnut;
+        slide.addChart(chartType, [{ name: item.seriesName, labels: item.labels, values: item.values }], {
+          x, y, w, h,
+          showLegend: false, showTitle: false, showValue: false, showCategoryName: false, showPercent: false,
+          showBorder: false, holeSize: item.holeSize, firstSliceAng: item.firstSliceAngle, chartColors: item.colors,
+          objectName: item.objectName,
+          chartArea: { fill: { color: 'FFFFFF', transparency: 100 } },
+          plotArea: { fill: { color: 'FFFFFF', transparency: 100 } },
+        });
+        chartObjects++;
+      } else if (object.kind === 'svg') {
       const x = clamp((item.x / data.clip.width) * 13.333, 0, 13.333);
       const y = clamp((item.y / data.clip.height) * 7.5, 0, 7.5);
       const w = clamp((item.w / data.clip.width) * 13.333, 0.02, 13.333 - x);
@@ -93,8 +126,7 @@ try {
       const dataUri = `data:image/svg+xml;base64,${Buffer.from(item.svgMarkup, 'utf8').toString('base64')}`;
       slide.addImage({ data: dataUri, x, y, w, h });
       svgObjects++;
-    }
-    for (const item of data.texts) {
+      } else if (object.kind === 'text') {
       // CSS font sizes are expressed in layout pixels, not PowerPoint points.
       // Convert through the rendered slide scale instead of assuming 1px = .75pt.
       const fontSizePt = Math.max(1, item.fontSize * item.slideScaleX * (13.333 * 72 / data.clip.width));
@@ -131,7 +163,12 @@ try {
       if (item.href) options.hyperlink = { url: item.href };
       slide.addText(item.text, options);
       textObjects++;
+      }
     }
+    rasterOnlyObjects += data.metrics.rasterOnly;
+    semanticObjects += data.metrics.semantic;
+    semanticRebuiltObjects += data.metrics.semanticRebuilt;
+    unsupportedSemanticObjects += data.metrics.unsupportedSemantic;
   }
 
   fs.mkdirSync(outDir, { recursive: true });
@@ -139,7 +176,8 @@ try {
   // 后处理：pptxgenjs 无渐变 API，把记录到的渐变 shape 的 solidFill 替换为 gradFill
   if (gradientShapes.length) await injectGradientFills(path.resolve(args.output), gradientShapes);
   console.log(`PPTX exported: ${path.resolve(args.output)}`);
-  console.log(`Slides: ${count}; editable text objects: ${textObjects}; editable shape objects: ${shapeObjects}; editable line objects: ${lineObjects}; SVG image objects: ${svgObjects}; mode: hybrid-editable`);
+  const semanticCoverage = semanticObjects ? Math.round(semanticRebuiltObjects / semanticObjects * 1000) / 10 : 100;
+  console.log(`Slides: ${count}; editable text objects: ${textObjects}; editable shape objects: ${shapeObjects}; editable line objects: ${lineObjects}; editable chart objects: ${chartObjects}; SVG image objects: ${svgObjects}; intentional raster-only objects: ${rasterOnlyObjects}; semantic editability coverage: ${semanticCoverage}%; unsupported semantic objects: ${unsupportedSemanticObjects}; mode: hybrid-editable-v2`);
   // Best-effort temp cleanup. A sandbox safe-delete hook can make fs.rmSync throw (genie-trash
   // ETIMEDOUT); that must never mask a successful export, so swallow it and warn instead.
   try { fs.rmSync(tempDir, { recursive: true, force: true }); }
@@ -159,7 +197,16 @@ async function prepareSlide(page, selector, index) {
     const slides = [...document.querySelectorAll(selector)];
     const target = slides[index];
     if (!target) throw new Error(`Slide ${index + 1} is missing`);
-    window.__editablePptxRestore = slides.map(el => ({ el, style: el.getAttribute('style'), hidden: el.hidden }));
+    const targetShell = target.closest('[data-slide-shell]');
+    const shells = [...new Set(slides.map(el => el.closest('[data-slide-shell]')).filter(Boolean))];
+    window.__editablePptxRestore = {
+      slides: slides.map(el => ({ el, style: el.getAttribute('style'), hidden: el.hidden })),
+      shells: shells.map(el => ({ el, style: el.getAttribute('style'), hidden: el.hidden })),
+    };
+    shells.forEach(el => {
+      el.hidden = false;
+      if (el !== targetShell) el.style.setProperty('display', 'none', 'important');
+    });
     slides.forEach((el, i) => {
       el.hidden = false;
       if (i !== index) el.style.setProperty('display', 'none', 'important');
@@ -171,16 +218,15 @@ async function prepareSlide(page, selector, index) {
     });
     // Capture every slide at the viewport origin instead of expanding Chromium to the
     // height of the whole stacked deck. This stays stable for long presentations.
-    const shell = target.closest('[data-slide-shell]');
-    if (shell) {
-      window.__editablePptxShellRestore = { el: shell, style: shell.getAttribute('style') };
-      shell.style.setProperty('position', 'fixed', 'important');
-      shell.style.setProperty('left', '0', 'important');
-      shell.style.setProperty('top', '0', 'important');
-      shell.style.setProperty('width', '1600px', 'important');
-      shell.style.setProperty('height', '900px', 'important');
-      shell.style.setProperty('transform', 'none', 'important');
-      shell.style.setProperty('z-index', '2147483647', 'important');
+    if (targetShell) {
+      targetShell.style.setProperty('position', 'fixed', 'important');
+      targetShell.style.setProperty('left', '0', 'important');
+      targetShell.style.setProperty('top', '0', 'important');
+      targetShell.style.setProperty('width', '1600px', 'important');
+      targetShell.style.setProperty('height', '900px', 'important');
+      targetShell.style.setProperty('overflow', 'visible', 'important');
+      targetShell.style.setProperty('transform', 'none', 'important');
+      targetShell.style.setProperty('z-index', '2147483647', 'important');
     } else {
       // Generic decks may expose slides directly without a data-slide-shell wrapper.
       // Fix the active slide itself to the origin so later stacked pages are capturable too.
@@ -241,14 +287,29 @@ async function prepareSlide(page, selector, index) {
         distance: Math.max(0.5, Math.sqrt(offX * offX + offY * offY)),
       };
     };
-    const shapes = [...target.querySelectorAll('[data-pptx-shape]')].map(el => {
+    const orderOf = (() => {
+      const elements = [...target.querySelectorAll('*')];
+      return el => Math.max(0, elements.indexOf(el));
+    })();
+    const renderMode = (el, fallback='native') => (el.getAttribute('data-pptx-render') || fallback).trim().toLowerCase();
+    const zOf = (el, fallback) => {
+      const raw = el.closest('[data-pptx-z]')?.getAttribute('data-pptx-z');
+      return raw != null && raw !== '' && Number.isFinite(Number(raw)) ? Number(raw) : fallback;
+    };
+    const numberAttr = (el, name, fallback) => {
+      const raw = el.getAttribute(name);
+      return raw != null && raw !== '' && Number.isFinite(Number(raw)) ? Number(raw) : fallback;
+    };
+    const listAttr = (el, name) => (el.getAttribute(name) || '').split(',').map(v => v.trim()).filter(Boolean);
+    const nativeShapeEls = [...target.querySelectorAll('[data-pptx-shape]')].filter(el => renderMode(el) === 'native');
+    const shapes = nativeShapeEls.map(el => {
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
       const typeValue = (el.getAttribute('data-pptx-shape') || '').trim();
       const fillValue = el.getAttribute('data-pptx-fill') || cs.backgroundColor;
       const lineValue = el.getAttribute('data-pptx-line') || cs.borderTopColor;
-      const fillOpacity = Number(el.getAttribute('data-pptx-fill-opacity') || '') || colorAlpha(fillValue) * 100;
-      const lineOpacity = Number(el.getAttribute('data-pptx-line-opacity') || '') || colorAlpha(lineValue) * 100;
+      const fillOpacity = numberAttr(el, 'data-pptx-fill-opacity', colorAlpha(fillValue) * 100);
+      const lineOpacity = numberAttr(el, 'data-pptx-line-opacity', colorAlpha(lineValue) * 100);
       const radius = parseFloat(cs.borderTopLeftRadius) || 0;
       const normalizedType = typeValue.toLowerCase();
       const type = !typeValue || normalizedType === 'auto'
@@ -277,13 +338,20 @@ async function prepareSlide(page, selector, index) {
         fillTransparency: Math.round(100 - Math.max(0, Math.min(100, fillOpacity))),
         line: colorHex(lineValue, el.getAttribute('data-pptx-line') || '#FFFFFF'),
         lineTransparency: Math.round(100 - Math.max(0, Math.min(100, lineOpacity))),
-        lineWidth: parseFloat(cs.borderTopWidth) || 0.1,
+        lineWidth: numberAttr(el, 'data-pptx-line-width', parseFloat(cs.borderTopWidth) || 0.1),
         gradient: parseGradient(el.getAttribute('data-pptx-fill-gradient')),
         shadow, shadowColor, shadowOpacity, shadowBlur, shadowDistance,
+        rotation: numberAttr(el, 'data-pptx-rotation', 0),
+        flipH: el.getAttribute('data-pptx-flip-h') === 'true',
+        flipV: el.getAttribute('data-pptx-flip-v') === 'true',
+        arcThicknessRatio: numberAttr(el, 'data-pptx-arc-thickness-ratio', NaN),
+        objectName: `shape-${orderOf(el)}-${el.getAttribute('data-pptx-name') || el.getAttribute('data-pptx-role') || 'object'}`,
+        z: zOf(el, 20), order: orderOf(el),
         slideScaleX, slideScaleY
       };
     }).filter(x => x.w > 1 && x.h > 1 && x.x + x.w > 0 && x.y + x.h > 0 && x.x < rect.width && x.y < rect.height);
-    const lines = [...target.querySelectorAll('[data-pptx-line-shape]')].map(el => {
+    const nativeLineEls = [...target.querySelectorAll('[data-pptx-line-shape]')].filter(el => renderMode(el) === 'native');
+    const lines = nativeLineEls.map(el => {
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
       const direction = (el.getAttribute('data-pptx-line-shape') || 'horizontal').toLowerCase();
@@ -291,8 +359,8 @@ async function prepareSlide(page, selector, index) {
       if (direction === 'vertical' || direction === 'down') { x2 = x1; y2 = r.bottom - rect.top; }
       if (direction === 'up') { y1 = r.bottom - rect.top; x2 = r.right - rect.left; y2 = r.top - rect.top; }
       if (direction === 'down-right' || direction === 'diagonal') y2 = r.bottom - rect.top;
-      const start = (el.getAttribute('data-pptx-line-start') || '').split(',').map(Number);
-      const end = (el.getAttribute('data-pptx-line-end') || '').split(',').map(Number);
+      const start = listAttr(el, 'data-pptx-line-start').map(Number);
+      const end = listAttr(el, 'data-pptx-line-end').map(Number);
       if (start.length === 2 && start.every(Number.isFinite)) { x1 = r.left - rect.left + r.width * start[0] / 100; y1 = r.top - rect.top + r.height * start[1] / 100; }
       if (end.length === 2 && end.every(Number.isFinite)) { x2 = r.left - rect.left + r.width * end[0] / 100; y2 = r.top - rect.top + r.height * end[1] / 100; }
       const colorValue = el.getAttribute('data-pptx-line-color') || cs.borderTopColor || cs.color;
@@ -301,20 +369,40 @@ async function prepareSlide(page, selector, index) {
       return {
         x: x1, y: y1, w: x2 - x1, h: y2 - y1,
         color: colorHex(colorValue, '#000000'), transparency: Math.round(100 - Math.max(0, Math.min(100, opacity))),
-        width: Number(el.getAttribute('data-pptx-line-width')) || parseFloat(cs.borderTopWidth) || 1,
+        width: numberAttr(el, 'data-pptx-line-width', parseFloat(cs.borderTopWidth) || 1),
         dash: el.getAttribute('data-pptx-line-dash') || cs.borderTopStyle || 'solid',
         beginArrowType: el.getAttribute('data-pptx-line-begin-arrow') || '',
         endArrowType: el.getAttribute('data-pptx-line-end-arrow') || '',
-        slideScaleX, slideScaleY
+        z: zOf(el, 40), order: orderOf(el), slideScaleX, slideScaleY
       };
     }).filter(x => Number.isFinite(x.x + x.y + x.w + x.h) && (Math.abs(x.w) > .5 || Math.abs(x.h) > .5));
+    const chartEls = [...target.querySelectorAll('[data-pptx-chart]')].filter(el => renderMode(el, 'chart') === 'chart');
+    const charts = chartEls.map(el => {
+      const r = el.getBoundingClientRect();
+      const values = listAttr(el, 'data-pptx-values').map(Number).filter(Number.isFinite);
+      const safeValues = values.length >= 2 ? values : [75, 25];
+      const labels = listAttr(el, 'data-pptx-labels');
+      const colors = listAttr(el, 'data-pptx-colors').map(value => colorHex(value, '#D00000'));
+      return {
+        chartType: (el.getAttribute('data-pptx-chart') || 'doughnut').trim(),
+        values: safeValues,
+        labels: labels.length === safeValues.length ? labels : safeValues.map((_, i) => `Part ${i + 1}`),
+        colors: colors.length === safeValues.length ? colors : ['D00000', 'F4D9D9'],
+        seriesName: el.getAttribute('data-pptx-series-name') || 'Value',
+        holeSize: Math.max(10, Math.min(90, numberAttr(el, 'data-pptx-hole-size', 70))),
+        firstSliceAngle: Math.max(0, Math.min(359, numberAttr(el, 'data-pptx-first-slice-angle', 270))),
+        objectName: `chart-${orderOf(el)}-${el.getAttribute('data-pptx-name') || el.getAttribute('data-pptx-role') || 'metric'}`,
+        x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height,
+        z: zOf(el, 30), order: orderOf(el), slideScaleX, slideScaleY,
+      };
+    }).filter(x => x.w > 1 && x.h > 1 && x.x + x.w > 0 && x.y + x.h > 0 && x.x < rect.width && x.y < rect.height);
     // Extract visible text nodes, not both their contenteditable container and
     // styled descendants. This prevents duplicated parent/child text overlays.
     const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         if (!node.textContent || !node.textContent.trim()) return NodeFilter.FILTER_REJECT;
         const el = node.parentElement;
-        if (!el || el.closest('[data-pptx-ignore="true"]')) return NodeFilter.FILTER_REJECT;
+        if (!el || el.closest('[data-pptx-ignore="true"],[data-pptx-render="raster"],[data-pptx-chart]')) return NodeFilter.FILTER_REJECT;
         if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(el.tagName)) return NodeFilter.FILTER_REJECT;
         const cs = getComputedStyle(el);
         if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return NodeFilter.FILTER_REJECT;
@@ -326,7 +414,8 @@ async function prepareSlide(page, selector, index) {
     });
     const textNodes = [];
     while (walker.nextNode()) textNodes.push(walker.currentNode);
-    const svgs = [...target.querySelectorAll('[data-pptx-svg]')].map(el => {
+    const svgEls = [...target.querySelectorAll('[data-pptx-svg]')].filter(el => renderMode(el, 'svg') === 'svg');
+    const svgs = svgEls.map(el => {
       const svg = el.tagName.toLowerCase() === 'svg' ? el : el.querySelector('svg');
       if (!svg) return null;
       const r = svg.getBoundingClientRect();
@@ -404,7 +493,7 @@ async function prepareSlide(page, selector, index) {
       };
       expandUses(clone);
       mergeDefs(clone);
-      return { x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height, svgMarkup: new XMLSerializer().serializeToString(clone) };
+      return { x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height, svgMarkup: new XMLSerializer().serializeToString(clone), z: zOf(el, 50), order: orderOf(el), slideScaleX, slideScaleY };
     }).filter(item => item && item.w > 1 && item.h > 1 && item.x + item.w > 0 && item.y + item.h > 0 && item.x < rect.width && item.y < rect.height);
     const texts = textNodes.map(node => {
       const el = node.parentElement;
@@ -421,18 +510,30 @@ async function prepareSlide(page, selector, index) {
         fontWeight: weight, fontStyle: cs.fontStyle,
         color: cs.color, opacity: parseFloat(cs.opacity) || 1, textAlign: cs.textAlign,
         lineHeight: parseFloat(cs.lineHeight) || 0, letterSpacing: parseFloat(cs.letterSpacing) || 0,
-        rotation, href: el.closest('a[href]')?.href || '', slideScaleX, slideScaleY
+        rotation, href: el.closest('a[href]')?.href || '', z: zOf(el, 100), order: orderOf(el), slideScaleX, slideScaleY
       };
     }).filter(x => x.x + x.w > 0 && x.y + x.h > 0 && x.x < rect.width && x.y < rect.height);
     [...new Set(textNodes.map(node => node.parentElement))].forEach(el => el.classList.add('__editable_pptx_text'));
-    target.querySelectorAll('[data-pptx-shape]').forEach(el => el.classList.add('__editable_pptx_shape'));
-    target.querySelectorAll('[data-pptx-line-shape]').forEach(el => el.classList.add('__editable_pptx_line'));
-    target.querySelectorAll('[data-pptx-svg]').forEach(el => el.classList.add('__editable_pptx_svg'));
+    nativeShapeEls.forEach(el => el.classList.add('__editable_pptx_shape'));
+    nativeLineEls.forEach(el => el.classList.add('__editable_pptx_line'));
+    chartEls.forEach(el => el.classList.add('__editable_pptx_chart'));
+    svgEls.forEach(el => el.classList.add('__editable_pptx_svg'));
     const style = document.createElement('style');
     style.id = '__editable_pptx_hide_text';
-    style.textContent = `.__editable_pptx_text{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important} .__editable_pptx_text::before,.__editable_pptx_text::after{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important} .__editable_pptx_shape{background:transparent!important;background-image:none!important;border-color:transparent!important;box-shadow:none!important} .__editable_pptx_line{background:transparent!important;border-color:transparent!important;box-shadow:none!important;color:transparent!important} .__editable_pptx_svg{visibility:hidden!important}`;
+    style.textContent = `.__editable_pptx_text{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important} .__editable_pptx_text::before,.__editable_pptx_text::after{color:transparent!important;-webkit-text-fill-color:transparent!important;text-shadow:none!important} .__editable_pptx_shape{background:transparent!important;background-image:none!important;border-color:transparent!important;box-shadow:none!important;outline-color:transparent!important} .__editable_pptx_line{background:transparent!important;background-image:none!important;border-color:transparent!important;box-shadow:none!important;color:transparent!important} .__editable_pptx_chart,.__editable_pptx_svg{visibility:hidden!important}`;
     document.head.appendChild(style);
-    return { clip: { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: rect.width, height: rect.height }, texts, shapes, lines, svgs };
+    const semanticEls = [...target.querySelectorAll('[data-pptx-semantic="true"],[data-pptx-role]')];
+    const rebuiltEls = new Set([...nativeShapeEls, ...nativeLineEls, ...chartEls, ...svgEls]);
+    const rasterEls = [...target.querySelectorAll('[data-pptx-render="raster"]')];
+    const nativeEls = new Set([...nativeShapeEls, ...nativeLineEls, ...chartEls]);
+    const semanticRebuilt = semanticEls.filter(el => nativeEls.has(el) || el.matches('[data-pptx-text="true"]')).length;
+    const metrics = {
+      rasterOnly: rasterEls.length,
+      semantic: semanticEls.length,
+      semanticRebuilt,
+      unsupportedSemantic: semanticEls.filter(el => !rebuiltEls.has(el) && !rasterEls.includes(el) && !el.matches('[data-pptx-text="true"]')).length,
+    };
+    return { clip: { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: rect.width, height: rect.height }, texts, shapes, lines, charts, svgs, metrics };
   }, { selector, index });
 }
 
@@ -442,16 +543,13 @@ async function restoreSlide(page) {
     document.querySelectorAll('.__editable_pptx_text').forEach(el => el.classList.remove('__editable_pptx_text'));
     document.querySelectorAll('.__editable_pptx_shape').forEach(el => el.classList.remove('__editable_pptx_shape'));
     document.querySelectorAll('.__editable_pptx_line').forEach(el => el.classList.remove('__editable_pptx_line'));
+    document.querySelectorAll('.__editable_pptx_chart').forEach(el => el.classList.remove('__editable_pptx_chart'));
     document.querySelectorAll('.__editable_pptx_svg').forEach(el => el.classList.remove('__editable_pptx_svg'));
-    (window.__editablePptxRestore || []).forEach(({ el, style, hidden }) => {
+    const restore = window.__editablePptxRestore || { slides: [], shells: [] };
+    [...restore.slides, ...restore.shells].forEach(({ el, style, hidden }) => {
       style == null ? el.removeAttribute('style') : el.setAttribute('style', style);
       el.hidden = hidden;
     });
-    if (window.__editablePptxShellRestore) {
-      const { el, style } = window.__editablePptxShellRestore;
-      style == null ? el.removeAttribute('style') : el.setAttribute('style', style);
-    }
-    delete window.__editablePptxShellRestore;
     delete window.__editablePptxRestore;
   });
 }
@@ -511,7 +609,7 @@ function rgbToHex(value='rgb(0,0,0)') { const n = value.match(/[\d.]+/g)?.slice(
 function mapAlign(v) { return ['center','right','justify'].includes(v) ? v : 'left'; }
 function resolveShapeType(pptx, value='roundRect') {
   const key = String(value || 'roundRect').trim();
-  const aliases = { roundrect:'roundRect', rectangle:'rect', circle:'ellipse', pill:'roundRect' };
+  const aliases = { roundrect:'roundRect', rectangle:'rect', circle:'ellipse', pill:'roundRect', blockarc:'blockArc' };
   const resolved = aliases[key.toLowerCase()] || key;
   return pptx.ShapeType[resolved] || pptx.ShapeType[resolved.toLowerCase()] || pptx.ShapeType.roundRect;
 }
@@ -541,7 +639,8 @@ async function injectGradientFills(outputPath, gradientShapes) {
     // 匹配完整 <p:sp>…</p:sp>（<p:spPr>/<p:spt> 等前缀被 (?=[\s>]) 排除）
     const sps = [...xml.matchAll(/<p:sp(?=[\s>])[\s\S]*?<\/p:sp>/g)];
     for (const item of items) {
-      const sp = sps[item.spIndex];
+      const named = item.name && sps.find(candidate => new RegExp(`<p:cNvPr[^>]*name="${escapeRegex(item.name)}"`).test(candidate));
+      const sp = named || sps[item.spIndex];
       if (!sp) continue;
       const original = sp[0];
       const replaced = original.replace(/<a:solidFill(?:\s[^>]*)?>[\s\S]*?<\/a:solidFill>/, gradFillXml(item.gradient));
@@ -564,3 +663,5 @@ function gradFillXml(gradient) {
   const ang = Math.round(gradient.angle * 60000);
   return `<a:gradFill rotWithShape="1"><a:gsLst>${stops}</a:gsLst><a:lin ang="${ang}" scaled="0"/></a:gradFill>`;
 }
+
+function escapeRegex(value) { return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
