@@ -7,11 +7,11 @@ description: Build polished, logically structured 16:9 HTML presentation pages f
 
 ## Version
 
-Current design-workflow version: **2.5.0**.
+Current design-workflow version: **2.6.0**.
 
 Create slides with Codex's own content reasoning and HTML/CSS design ability. Optimize in this order:
 
-**conclusion → semantic relationships → grouping → hierarchy → layout → wireframe → visual tokens → emphasis and component strategy → visual craft → PPTX annotation → dual-render QA**
+**conclusion → semantic relationships → grouping → hierarchy → layout → wireframe → visual tokens → emphasis and component strategy → visual craft → PPTX annotation → group annotation → dual-render QA**
 
 Do not begin styling before the content model and layout rationale are clear.
 
@@ -107,7 +107,7 @@ Do not accept a page merely because it has no overflow. A page fails if the conc
 
 ### 7. Annotate for PPTX after design freeze
 
-Only after the HTML composition passes visual QA, classify every requested visual primitive as native, chart, SVG, or raster. Add `data-pptx-render`, semantic role, z layer, and shape/line/chart/SVG metadata to each atomic element. A progress bar needs separate track and fill annotations; overlapping logo circles need separate ellipse annotations; flows need separate card and connector annotations; percentage rings should use native doughnut charts when chart editability is required.
+Only after the HTML composition passes visual QA, classify every requested visual primitive as native, chart, SVG, or raster. Add `data-pptx-render`, semantic role, z layer, and shape/line/chart/SVG metadata to each atomic element. A progress bar needs separate track and fill annotations; overlapping logo circles need separate ellipse annotations; flows need separate card and connector annotations; percentage rings should use native doughnut charts when chart editability is required. If several atomic primitives should move together, add the same `data-pptx-group` (optionally on a common wrapper) and `data-pptx-group-name`; the exporter will create a real PowerPoint group while retaining the children as independent editable objects. Do not group raster-only pixels or rely on grouping to make an unmarked parent editable.
 
 Do not assume that pixels in the supplied PNG become editable. If its ornaments must be editable, split the source into a clean base image plus DOM-rebuilt ornaments. Preserve the original image as a fidelity reference and verify the reconstructed result against it. Keep unsupported gradients, masks, glows, photographs, and illustrations explicitly marked raster or exported as SVG, and report that editability level truthfully.
 
@@ -115,7 +115,7 @@ Re-render once after annotation to confirm that metadata did not change the HTML
 
 ### 8. Export and verify PPTX
 
-Read and use the repository's `export-editable-pptx` skill. Export with `.slide` as the selector. Verify the expected slide, text, shape, line, chart, SVG, raster-only, and unsupported-semantic counts. For logic-heavy pages, zero editable shapes or zero editable lines is an automatic failure; target at least 90% native-editable coverage of semantic structures and require zero unclassified semantic objects. A transparent overlay over a raster duplicate does not count as editable coverage.
+Read and use the repository's `export-editable-pptx` skill. Export with `.slide` as the selector. Verify the expected slide, text, shape, line, chart, SVG, group, raster-only, and unsupported-semantic counts. For logic-heavy pages, zero editable shapes or zero editable lines is an automatic failure; target at least 90% native-editable coverage of semantic structures and require zero unclassified semantic objects. When groups are requested, inspect the PPTX XML for the expected `<p:grpSp>` count and confirm the child-object counts are unchanged. A transparent overlay over a raster duplicate does not count as editable coverage.
 
 When PowerPoint is installed, render the PPTX through `render-pptx-preview.ps1` and compare it with the HTML PNG. Reject duplicated text, altered hierarchy, unexpected wrapping, clipping, displaced connectors, or meaningful visual drift.
 
@@ -139,7 +139,7 @@ Return absolute links to:
 - a continuous-scroll preview PNG for multi-page decks;
 - `.pptx` and PowerPoint-rendered preview PNGs when requested.
 
-Report slide count, editable text-object count, editable shape-object count, editable line-object count, editable chart-object count, SVG image-object count, intentional raster-only count, unsupported semantic count, and structural editability coverage. Identify intentionally flattened semantic objects. Mention font substitution only when non-system fonts are used.
+Report slide count, editable text-object count, editable shape-object count, editable line-object count, editable chart-object count, SVG image-object count, native PowerPoint group-object count, intentional raster-only count, unsupported semantic count, and structural editability coverage. Identify intentionally flattened semantic objects. Mention font substitution only when non-system fonts are used.
 
 ## Prohibitions
 

@@ -56,6 +56,20 @@ Use `data-pptx-role` or `data-pptx-semantic="true"` on meaningful objects so the
 
 Pixels inside an `<img>` or CSS background image are raster. To make baked-in circles, dots, bands, arrows, or other ornaments editable, use a clean base image and recreate each ornament as a DOM primitive.
 
+## PowerPoint groups
+
+Use `data-pptx-group` to express a relationship between two or more atomic editable objects that should move together in PowerPoint:
+
+```html
+<div data-pptx-group="metric-card-01" data-pptx-group-name="Metric card">
+  <div data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-role="card"></div>
+  <div data-pptx-render="chart" data-pptx-chart="doughnut" data-pptx-role="metric-chart"></div>
+  <span data-pptx-role="metric-value">75%</span>
+</div>
+```
+
+The group marker can be placed on a shared wrapper or repeated on each member. The exporter uses the nearest group ancestor, creates a native PowerPoint group only when at least two members are exported, and leaves every child as an independently editable PowerPoint object. Groups are slide-local; do not overlap groups or expect nested group synthesis. Group metadata cannot make pixels in a background image editable, and every member still needs its own native, chart, SVG, raster, or text treatment.
+
 ## Editable shapes
 
 Mark structural containers that should become editable PowerPoint shapes:

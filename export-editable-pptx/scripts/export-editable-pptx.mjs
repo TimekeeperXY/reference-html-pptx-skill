@@ -42,9 +42,11 @@ try {
   let semanticObjects = 0;
   let semanticRebuiltObjects = 0;
   let unsupportedSemanticObjects = 0;
+  let groupObjects = 0;
   // 渐变填充的 shape：pptxgenjs 只支持 solid fill，这里记录形状在 slide XML 中的 <p:sp> 顺序，
   // 导出完成后统一注入 gradFill（渐变颜色/色标在 PowerPoint 中仍可编辑）。
   const gradientShapes = [];
+  const groupDefinitions = [];
 
   for (let index = 0; index < count; index++) {
     const data = await prepareSlide(page, selector, index);
@@ -61,6 +63,14 @@ try {
       ...data.svgs.map(item => ({ kind: 'svg', item })),
       ...data.texts.map(item => ({ kind: 'text', item })),
     ].sort((a, b) => a.item.z - b.item.z || a.item.order - b.item.order);
+    for (const object of objects) {
+      if (object.item.groupId) groupDefinitions.push({
+        slideIndex: index,
+        id: object.item.groupId,
+        name: object.item.groupName,
+        objectName: object.item.objectName,
+      });
+    }
     let shapeIdx = 0;
     for (const object of objects) {
       const item = object.item;
@@ -101,7 +111,7 @@ try {
       };
       if (item.beginArrowType) line.beginArrowType = item.beginArrowType;
       if (item.endArrowType) line.endArrowType = item.endArrowType;
-      slide.addShape(pptx.ShapeType.line, { x, y, w, h, line });
+        slide.addShape(pptx.ShapeType.line, { x, y, w, h, line, objectName: item.objectName });
       lineObjects++;
       } else if (object.kind === 'chart') {
         const x = clamp((item.x / data.clip.width) * 13.333, 0, 13.333);
@@ -124,7 +134,7 @@ try {
       const w = clamp((item.w / data.clip.width) * 13.333, 0.02, 13.333 - x);
       const h = clamp((item.h / data.clip.height) * 7.5, 0.02, 7.5 - y);
       const dataUri = `data:image/svg+xml;base64,${Buffer.from(item.svgMarkup, 'utf8').toString('base64')}`;
-      slide.addImage({ data: dataUri, x, y, w, h });
+      slide.addImage({ data: dataUri, x, y, w, h, objectName: item.objectName });
       svgObjects++;
       } else if (object.kind === 'text') {
       // CSS font sizes are expressed in layout pixels, not PowerPoint points.
@@ -161,6 +171,7 @@ try {
         lineSpacingMultiple: item.lineHeight > 0 && item.fontSize > 0 ? item.lineHeight / item.fontSize : 1,
       };
       if (item.href) options.hyperlink = { url: item.href };
+      options.objectName = item.objectName;
       slide.addText(item.text, options);
       textObjects++;
       }
@@ -175,9 +186,10 @@ try {
   await pptx.writeFile({ fileName: path.resolve(args.output) });
   // 后处理：pptxgenjs 无渐变 API，把记录到的渐变 shape 的 solidFill 替换为 gradFill
   if (gradientShapes.length) await injectGradientFills(path.resolve(args.output), gradientShapes);
+  if (groupDefinitions.length) groupObjects = await injectGroups(path.resolve(args.output), groupDefinitions);
   console.log(`PPTX exported: ${path.resolve(args.output)}`);
   const semanticCoverage = semanticObjects ? Math.round(semanticRebuiltObjects / semanticObjects * 1000) / 10 : 100;
-  console.log(`Slides: ${count}; editable text objects: ${textObjects}; editable shape objects: ${shapeObjects}; editable line objects: ${lineObjects}; editable chart objects: ${chartObjects}; SVG image objects: ${svgObjects}; intentional raster-only objects: ${rasterOnlyObjects}; semantic editability coverage: ${semanticCoverage}%; unsupported semantic objects: ${unsupportedSemanticObjects}; mode: hybrid-editable-v2`);
+  console.log(`Slides: ${count}; editable text objects: ${textObjects}; editable shape objects: ${shapeObjects}; editable line objects: ${lineObjects}; editable chart objects: ${chartObjects}; SVG image objects: ${svgObjects}; PowerPoint group objects: ${groupObjects}; intentional raster-only objects: ${rasterOnlyObjects}; semantic editability coverage: ${semanticCoverage}%; unsupported semantic objects: ${unsupportedSemanticObjects}; mode: hybrid-editable-v3`);
   // Best-effort temp cleanup. A sandbox safe-delete hook can make fs.rmSync throw (genie-trash
   // ETIMEDOUT); that must never mask a successful export, so swallow it and warn instead.
   try { fs.rmSync(tempDir, { recursive: true, force: true }); }
@@ -301,6 +313,18 @@ async function prepareSlide(page, selector, index) {
       return raw != null && raw !== '' && Number.isFinite(Number(raw)) ? Number(raw) : fallback;
     };
     const listAttr = (el, name) => (el.getAttribute(name) || '').split(',').map(v => v.trim()).filter(Boolean);
+    const groupOf = el => {
+      const groupEl = el.closest('[data-pptx-group]');
+      if (!groupEl) return { groupId: '', groupName: '' };
+      return {
+        groupId: groupEl.getAttribute('data-pptx-group') || '',
+        groupName: groupEl.getAttribute('data-pptx-group-name') || groupEl.getAttribute('data-pptx-group') || 'Group',
+      };
+    };
+    const safeName = (prefix, el, fallback) => {
+      const label = el.getAttribute('data-pptx-name') || el.getAttribute('data-pptx-role') || fallback;
+      return `${prefix}-${orderOf(el)}-${label.replace(/[^A-Za-z0-9_.-]+/g, '-')}`;
+    };
     const nativeShapeEls = [...target.querySelectorAll('[data-pptx-shape]')].filter(el => renderMode(el) === 'native');
     const shapes = nativeShapeEls.map(el => {
       const r = el.getBoundingClientRect();
@@ -332,6 +356,7 @@ async function prepareSlide(page, selector, index) {
       const shadowDistance = explicitShadow
         ? Number(el.getAttribute('data-pptx-shadow-distance') || 1.2)
         : (inferred ? inferred.distance : 1.2);
+      const group = groupOf(el);
       return {
         type, x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height,
         fill: colorHex(fillValue, el.getAttribute('data-pptx-fill') || '#FFFFFF'),
@@ -345,7 +370,8 @@ async function prepareSlide(page, selector, index) {
         flipH: el.getAttribute('data-pptx-flip-h') === 'true',
         flipV: el.getAttribute('data-pptx-flip-v') === 'true',
         arcThicknessRatio: numberAttr(el, 'data-pptx-arc-thickness-ratio', NaN),
-        objectName: `shape-${orderOf(el)}-${el.getAttribute('data-pptx-name') || el.getAttribute('data-pptx-role') || 'object'}`,
+        objectName: safeName('shape', el, 'object'),
+        ...group,
         z: zOf(el, 20), order: orderOf(el),
         slideScaleX, slideScaleY
       };
@@ -366,6 +392,7 @@ async function prepareSlide(page, selector, index) {
       const colorValue = el.getAttribute('data-pptx-line-color') || cs.borderTopColor || cs.color;
       const opacityAttr = el.getAttribute('data-pptx-line-opacity');
       const opacity = opacityAttr == null || opacityAttr === '' ? colorAlpha(colorValue) * 100 : Number(opacityAttr);
+      const group = groupOf(el);
       return {
         x: x1, y: y1, w: x2 - x1, h: y2 - y1,
         color: colorHex(colorValue, '#000000'), transparency: Math.round(100 - Math.max(0, Math.min(100, opacity))),
@@ -373,6 +400,8 @@ async function prepareSlide(page, selector, index) {
         dash: el.getAttribute('data-pptx-line-dash') || cs.borderTopStyle || 'solid',
         beginArrowType: el.getAttribute('data-pptx-line-begin-arrow') || '',
         endArrowType: el.getAttribute('data-pptx-line-end-arrow') || '',
+        objectName: safeName('line', el, 'connector'),
+        ...group,
         z: zOf(el, 40), order: orderOf(el), slideScaleX, slideScaleY
       };
     }).filter(x => Number.isFinite(x.x + x.y + x.w + x.h) && (Math.abs(x.w) > .5 || Math.abs(x.h) > .5));
@@ -383,6 +412,7 @@ async function prepareSlide(page, selector, index) {
       const safeValues = values.length >= 2 ? values : [75, 25];
       const labels = listAttr(el, 'data-pptx-labels');
       const colors = listAttr(el, 'data-pptx-colors').map(value => colorHex(value, '#D00000'));
+      const group = groupOf(el);
       return {
         chartType: (el.getAttribute('data-pptx-chart') || 'doughnut').trim(),
         values: safeValues,
@@ -391,7 +421,8 @@ async function prepareSlide(page, selector, index) {
         seriesName: el.getAttribute('data-pptx-series-name') || 'Value',
         holeSize: Math.max(10, Math.min(90, numberAttr(el, 'data-pptx-hole-size', 70))),
         firstSliceAngle: Math.max(0, Math.min(359, numberAttr(el, 'data-pptx-first-slice-angle', 270))),
-        objectName: `chart-${orderOf(el)}-${el.getAttribute('data-pptx-name') || el.getAttribute('data-pptx-role') || 'metric'}`,
+        objectName: safeName('chart', el, 'metric'),
+        ...group,
         x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height,
         z: zOf(el, 30), order: orderOf(el), slideScaleX, slideScaleY,
       };
@@ -493,9 +524,9 @@ async function prepareSlide(page, selector, index) {
       };
       expandUses(clone);
       mergeDefs(clone);
-      return { x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height, svgMarkup: new XMLSerializer().serializeToString(clone), z: zOf(el, 50), order: orderOf(el), slideScaleX, slideScaleY };
+      return { x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height, svgMarkup: new XMLSerializer().serializeToString(clone), objectName: safeName('svg', el, 'graphic'), ...groupOf(el), z: zOf(el, 50), order: orderOf(el), slideScaleX, slideScaleY };
     }).filter(item => item && item.w > 1 && item.h > 1 && item.x + item.w > 0 && item.y + item.h > 0 && item.x < rect.width && item.y < rect.height);
-    const texts = textNodes.map(node => {
+    const texts = textNodes.map((node, textIndex) => {
       const el = node.parentElement;
       const range = document.createRange();
       range.selectNodeContents(node);
@@ -504,13 +535,14 @@ async function prepareSlide(page, selector, index) {
       const matrix = cs.transform?.startsWith('matrix(') ? cs.transform.slice(7, -1).split(',').map(Number) : null;
       const rotation = matrix ? Math.round(Math.atan2(matrix[1], matrix[0]) * 180 / Math.PI) : 0;
       const weight = cs.fontWeight === 'bold' ? 700 : parseInt(cs.fontWeight, 10) || 400;
+      const group = groupOf(el);
       return {
         text: node.textContent.replace(/\s+/g, ' ').trim(), x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height,
         fontFamily: cs.fontFamily, fontSize: parseFloat(cs.fontSize) || 16,
         fontWeight: weight, fontStyle: cs.fontStyle,
         color: cs.color, opacity: parseFloat(cs.opacity) || 1, textAlign: cs.textAlign,
         lineHeight: parseFloat(cs.lineHeight) || 0, letterSpacing: parseFloat(cs.letterSpacing) || 0,
-        rotation, href: el.closest('a[href]')?.href || '', z: zOf(el, 100), order: orderOf(el), slideScaleX, slideScaleY
+        rotation, href: el.closest('a[href]')?.href || '', objectName: `${safeName('text', el, 'text')}-${textIndex}`, ...group, z: zOf(el, 100), order: orderOf(el), slideScaleX, slideScaleY
       };
     }).filter(x => x.x + x.w > 0 && x.y + x.h > 0 && x.x < rect.width && x.y < rect.height);
     [...new Set(textNodes.map(node => node.parentElement))].forEach(el => el.classList.add('__editable_pptx_text'));
@@ -524,14 +556,15 @@ async function prepareSlide(page, selector, index) {
     document.head.appendChild(style);
     const semanticEls = [...target.querySelectorAll('[data-pptx-semantic="true"],[data-pptx-role]')];
     const rebuiltEls = new Set([...nativeShapeEls, ...nativeLineEls, ...chartEls, ...svgEls]);
+    const textHosts = new Set(textNodes.map(node => node.parentElement));
     const rasterEls = [...target.querySelectorAll('[data-pptx-render="raster"]')];
     const nativeEls = new Set([...nativeShapeEls, ...nativeLineEls, ...chartEls]);
-    const semanticRebuilt = semanticEls.filter(el => nativeEls.has(el) || el.matches('[data-pptx-text="true"]')).length;
+    const semanticRebuilt = semanticEls.filter(el => nativeEls.has(el) || textHosts.has(el) || el.matches('[data-pptx-text="true"]')).length;
     const metrics = {
       rasterOnly: rasterEls.length,
       semantic: semanticEls.length,
       semanticRebuilt,
-      unsupportedSemantic: semanticEls.filter(el => !rebuiltEls.has(el) && !rasterEls.includes(el) && !el.matches('[data-pptx-text="true"]')).length,
+      unsupportedSemantic: semanticEls.filter(el => !rebuiltEls.has(el) && !textHosts.has(el) && !rasterEls.includes(el) && !el.matches('[data-pptx-text="true"]')).length,
     };
     return { clip: { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: rect.width, height: rect.height }, texts, shapes, lines, charts, svgs, metrics };
   }, { selector, index });
@@ -650,6 +683,92 @@ async function injectGradientFills(outputPath, gradientShapes) {
   }
   const out = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   fs.writeFileSync(outputPath, out);
+}
+
+// 将同一 data-pptx-group 下的原生对象包进真正的 PowerPoint p:grpSp。
+// 子对象不被栅格化，仍可在 PowerPoint 中单独选中、编辑和取消组合。
+async function injectGroups(outputPath, groupDefinitions) {
+  const zip = await JSZip.loadAsync(fs.readFileSync(outputPath));
+  const bySlide = new Map();
+  for (const definition of groupDefinitions) {
+    if (!definition.id || !definition.objectName) continue;
+    if (!bySlide.has(definition.slideIndex)) bySlide.set(definition.slideIndex, new Map());
+    const slideGroups = bySlide.get(definition.slideIndex);
+    const key = String(definition.id);
+    if (!slideGroups.has(key)) slideGroups.set(key, { id: key, name: definition.name || key, objectNames: [] });
+    const group = slideGroups.get(key);
+    if (!group.objectNames.includes(definition.objectName)) group.objectNames.push(definition.objectName);
+  }
+
+  let total = 0;
+  for (const [slideIndex, groups] of bySlide) {
+    const file = `ppt/slides/slide${slideIndex + 1}.xml`;
+    const entry = zip.file(file);
+    if (!entry) continue;
+    let xml = await entry.async('string');
+    for (const group of groups.values()) {
+      if (group.objectNames.length < 2) continue;
+      const candidates = [...xml.matchAll(/<(p:sp|p:pic|p:graphicFrame|p:cxnSp)(?=[\s>])[\s\S]*?<\/\1>/g)];
+      const selected = group.objectNames
+        .map(name => candidates.find(candidate => new RegExp(`<p:cNvPr[^>]*name="${escapeRegex(name)}"`).test(candidate[0])))
+        .filter(Boolean)
+        .filter((candidate, index, all) => all.findIndex(item => item.index === candidate.index) === index)
+        .sort((a, b) => a.index - b.index);
+      if (selected.length < 2) continue;
+
+      const bounds = selected.map(candidate => extractNodeBounds(candidate[0])).filter(Boolean);
+      if (bounds.length < 2) continue;
+      const minX = Math.min(...bounds.map(item => item.x));
+      const minY = Math.min(...bounds.map(item => item.y));
+      const maxX = Math.max(...bounds.map(item => item.x + item.w));
+      const maxY = Math.max(...bounds.map(item => item.y + item.h));
+      const width = Math.max(1, maxX - minX);
+      const height = Math.max(1, maxY - minY);
+      const groupId = nextXmlId(xml);
+      const groupName = escapeXml(group.name || 'Group');
+      const groupXml = `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="${groupId}" name="${groupName}"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="${minX}" y="${minY}"/><a:ext cx="${width}" cy="${height}"/><a:chOff x="${minX}" y="${minY}"/><a:chExt cx="${width}" cy="${height}"/></a:xfrm></p:grpSpPr>${selected.map(candidate => candidate[0]).join('')}</p:grpSp>`;
+      let replacement = '';
+      let cursor = 0;
+      selected.forEach((candidate, index) => {
+        replacement += xml.slice(cursor, candidate.index);
+        if (index === 0) replacement += groupXml;
+        cursor = candidate.index + candidate[0].length;
+      });
+      replacement += xml.slice(cursor);
+      xml = replacement;
+      total++;
+    }
+    zip.file(file, xml);
+  }
+  const out = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+  fs.writeFileSync(outputPath, out);
+  return total;
+}
+
+function extractNodeBounds(node) {
+  const xfrm = node.match(/<(?:p|a):xfrm\b[\s\S]*?<\/(?:p|a):xfrm>/)?.[0] || node;
+  const offTag = xfrm.match(/<a:off\b[^>]*>/)?.[0];
+  const extTag = xfrm.match(/<a:ext\b[^>]*>/)?.[0];
+  if (!offTag || !extTag) return null;
+  const attr = (tag, name) => {
+    const match = tag.match(new RegExp(`\\b${name}="(-?\\d+)"`));
+    return match ? Number(match[1]) : NaN;
+  };
+  const x = attr(offTag, 'x');
+  const y = attr(offTag, 'y');
+  const w = attr(extTag, 'cx');
+  const h = attr(extTag, 'cy');
+  return [x, y, w, h].every(Number.isFinite) ? { x, y, w, h } : null;
+}
+
+function nextXmlId(xml) {
+  let max = 0;
+  for (const match of xml.matchAll(/\bid="(\d+)"/g)) max = Math.max(max, Number(match[1]));
+  return max + 1;
+}
+
+function escapeXml(value) {
+  return String(value).replace(/[<>&'\"]/g, char => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[char]));
 }
 
 function gradFillXml(gradient) {
