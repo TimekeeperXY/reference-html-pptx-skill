@@ -48,16 +48,41 @@ Use these QA markers on semantic HTML:
 - `data-text-role="note"` or `data-text-role="source"` for legitimate 14–15px text;
 - `data-density-exempt="true"` or `data-overflow-exempt="true"` only for a documented semantic exception.
 
+## Editable object levels
+
+Every visual object requested as editable must be classified with `data-pptx-render="native|chart|svg|raster"`. Shape and line markers default to native for backward compatibility, chart markers to chart, and SVG markers to SVG.
+
+Use `data-pptx-role` or `data-pptx-semantic="true"` on meaningful objects so the audit can calculate coverage. Use `data-pptx-z` to preserve layer order. Only objects removed from the screenshot and rebuilt count as editable.
+
+Pixels inside an `<img>` or CSS background image are raster. To make baked-in circles, dots, bands, arrows, or other ornaments editable, use a clean base image and recreate each ornament as a DOM primitive.
+
+## PowerPoint groups
+
+Use `data-pptx-group` to express a relationship between two or more atomic editable objects that should move together in PowerPoint:
+
+```html
+<div data-pptx-group="metric-card-01" data-pptx-group-name="Metric card">
+  <div data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-role="card"></div>
+  <div data-pptx-render="chart" data-pptx-chart="doughnut" data-pptx-role="metric-chart"></div>
+  <span data-pptx-role="metric-value">75%</span>
+</div>
+```
+
+The group marker can be placed on a shared wrapper or repeated on each member. The exporter uses the nearest group ancestor, creates a native PowerPoint group only when at least two members are exported, and leaves every child as an independently editable PowerPoint object. Groups are slide-local; do not overlap groups or expect nested group synthesis. Group metadata cannot make pixels in a background image editable, and every member still needs its own native, chart, SVG, raster, or text treatment.
+
 ## Editable shapes
 
 Mark structural containers that should become editable PowerPoint shapes:
 
 ```html
 <article class="card"
+  data-pptx-render="native"
   data-pptx-shape="roundRect"
   data-pptx-fill="#FFFFFF"
   data-pptx-fill-opacity="94"
-  data-pptx-line="#FFFFFF">...</article>
+  data-pptx-line="#FFFFFF"
+  data-pptx-role="card"
+  data-pptx-z="20">...</article>
 ```
 
 Supported `data-pptx-shape` values:
@@ -102,6 +127,33 @@ When `data-pptx-shadow` is omitted but the element carries a CSS `box-shadow`, t
 
 Keep truly complex masks, image overlays, and glass effects in the background layer; they are not reconstructable as a single editable shape.
 
+Annotate atomic primitives, not only their parent component. For a progress bar, mark the track and fill separately. For a logo made from overlapping circles, mark every circle. For cards connected by arrows, mark every card and connector.
+
+## Editable doughnut charts
+
+Use native charts for percentage rings:
+
+```html
+<div class="metric-ring"
+  data-pptx-render="chart"
+  data-pptx-chart="doughnut"
+  data-pptx-values="75,25"
+  data-pptx-labels="Complete,Remaining"
+  data-pptx-colors="#D00000,#F4D9D9"
+  data-pptx-hole-size="72"
+  data-pptx-first-slice-angle="270"
+  data-pptx-role="metric-chart"
+  data-pptx-z="30"></div>
+```
+
+Place the center percentage in a separate DOM text element. Do not use `conic-gradient` when native chart editing is required.
+
+## SVG and raster
+
+Mark exact vector artwork with `data-pptx-svg="true" data-pptx-render="svg"`. It becomes one movable and scalable SVG image, not path-level editable PowerPoint shapes.
+
+Mark intentionally flattened photos, textures, blur, canvas, or unsupported illustrations with `data-pptx-render="raster"`. Text inside raster-marked containers remains in the screenshot and is not extracted.
+
 ## Editable SVG icons
 
 Mark an inline SVG that should remain a crisp, movable vector image object in PowerPoint:
@@ -126,6 +178,7 @@ Use a real DOM element for every line that carries sequence, hierarchy, directio
 
 ```html
 <div class="connector"
+  data-pptx-render="native"
   data-pptx-line-shape="horizontal"
   data-pptx-line-color="#C90000"
   data-pptx-line-width="2"
@@ -156,8 +209,9 @@ Do not implement semantic connectors with `::before` or `::after`; pseudo-elemen
 
 Before export:
 
-1. Count semantic cards, nodes, badges, cells, axes, arrows, and connectors.
-2. Confirm every semantic container has `data-pptx-shape`.
-3. Confirm every semantic line has `data-pptx-line-shape`.
-4. Treat zero editable shapes or zero editable lines as a failure for logic-heavy pages.
-5. Target at least 90% native-editable coverage of semantic structural objects.
+1. Count semantic cards, nodes, badges, cells, axes, arrows, progress tracks/fills, brand primitives, charts, and connectors.
+2. Confirm every semantic element has a render classification and the matching shape, line, chart, or SVG marker.
+3. Confirm every semantic connector is a real DOM element rather than a pseudo-element.
+4. Confirm background-image ornaments requested as editable were decomposed into DOM primitives.
+5. Treat zero editable shapes or zero editable lines as a failure for logic-heavy pages.
+6. Target at least 90% native-editable coverage and zero unsupported semantic objects.
