@@ -147,56 +147,21 @@ try {
       const componentTypes = [...slide.querySelectorAll('[data-component-type]')]
         .filter(visible).map((el) => el.getAttribute('data-component-type')).filter(Boolean);
       const distinctComponentTypes = [...new Set(componentTypes)];
-      const componentRoots = [...slide.querySelectorAll('[data-component-type]')].filter(visible);
-      const componentInstances = componentRoots.map((el) => ({
-        type: el.getAttribute('data-component-type') || '',
-        instance: el.getAttribute('data-component-instance') || '',
-        variant: el.getAttribute('data-component-variant') || '',
-        group: el.getAttribute('data-pptx-group') || '',
-        slots: [...el.querySelectorAll('[data-component-slot]')].map((slot) => slot.getAttribute('data-component-slot')).filter(Boolean),
-      }));
-      const componentIssues = [];
-      const componentWarnings = [];
-      const seenInstances = new Set();
-      for (const component of componentInstances) {
-        const label = component.type || 'component';
-        if (!component.instance) componentIssues.push(`${label}: component is missing data-component-instance.`);
-        else if (seenInstances.has(component.instance)) componentIssues.push(`${label}: duplicate data-component-instance "${component.instance}".`);
-        else seenInstances.add(component.instance);
-        if (!component.variant) componentWarnings.push(`${label}/${component.instance || 'unidentified'}: component is missing data-component-variant.`);
-        if (!component.slots.length) componentWarnings.push(`${label}/${component.instance || 'unidentified'}: component has no named data-component-slot.`);
-        if (!component.group) componentWarnings.push(`${label}/${component.instance || 'unidentified'}: component has no data-pptx-group; it will not arrive as a PowerPoint group.`);
-      }
       const primaryEmphasisCount = [...slide.querySelectorAll('[data-emphasis-level="primary"]')].filter(visible).length;
       const secondaryEmphasisCount = [...slide.querySelectorAll('[data-emphasis-level="secondary"]')].filter(visible).length;
 
       const semanticEls = [...slide.querySelectorAll('[data-pptx-semantic="true"],[data-pptx-role]')].filter(visible);
       const editabilityIssues = [];
       const editabilityWarnings = [];
-      const editability = { semantic: semanticEls.length, text: 0, native: 0, chart: 0, svg: 0, raster: 0, unsupported: 0 };
-      const groupMap = new Map();
-      const groupMember = (el) => el.hasAttribute('data-pptx-shape') || el.hasAttribute('data-pptx-line-shape') || el.hasAttribute('data-pptx-chart') || el.hasAttribute('data-pptx-svg') || directText(el);
-      for (const el of slide.querySelectorAll('*')) {
-        if (!visible(el) || !groupMember(el)) continue;
-        const carrier = el.closest('[data-pptx-group]');
-        const id = carrier?.getAttribute('data-pptx-group')?.trim();
-        if (!id) continue;
-        if (!groupMap.has(id)) groupMap.set(id, { id, name: carrier.getAttribute('data-pptx-group-name') || id, members: 0 });
-        groupMap.get(id).members += 1;
-      }
-      const groups = [...groupMap.values()];
-      for (const group of groups) {
-        if (group.members < 2) editabilityWarnings.push(`${group.id}: group has ${group.members} exported candidate; PowerPoint grouping requires at least two members.`);
-      }
+      const editability = { semantic: semanticEls.length, native: 0, chart: 0, svg: 0, raster: 0, unsupported: 0 };
       for (const el of semanticEls) {
         const explicit = (el.getAttribute('data-pptx-render') || '').trim().toLowerCase();
         const inferred = el.hasAttribute('data-pptx-chart') ? 'chart'
           : el.hasAttribute('data-pptx-svg') ? 'svg'
-          : (el.hasAttribute('data-pptx-shape') || el.hasAttribute('data-pptx-line-shape')) ? 'native'
-          : directText(el) ? 'text' : '';
+          : (el.hasAttribute('data-pptx-shape') || el.hasAttribute('data-pptx-line-shape')) ? 'native' : '';
         const mode = explicit || inferred;
         const label = el.getAttribute('data-pptx-role') || el.id || el.className || el.tagName.toLowerCase();
-        if (!['text', 'native', 'chart', 'svg', 'raster'].includes(mode)) {
+        if (!['native', 'chart', 'svg', 'raster'].includes(mode)) {
           editability.unsupported++;
           editabilityIssues.push(`${label}: semantic object has no valid data-pptx-render classification.`);
           continue;
@@ -252,13 +217,9 @@ try {
         distinctComponentTypes,
         primaryEmphasisCount,
         secondaryEmphasisCount,
-        componentInstances,
-        componentIssues,
-        componentWarnings,
         editability,
         editabilityIssues,
         editabilityWarnings,
-        groups,
         occupancy,
         occupancyExempt,
         slideOverflow: slideStyle.overflow,
@@ -294,12 +255,10 @@ try {
     if (item.primaryEmphasisCount === 0) result.warnings.push(`${prefix}: no [data-emphasis-level="primary"] focal system is marked.`);
     if (item.primaryEmphasisCount > 2) result.warnings.push(`${prefix}: ${item.primaryEmphasisCount} primary emphasis objects may compete for attention.`);
     if (item.secondaryEmphasisCount > 4) result.warnings.push(`${prefix}: ${item.secondaryEmphasisCount} secondary emphasis objects may dilute the hierarchy.`);
-    for (const issue of item.componentIssues) result.errors.push(`${prefix}: ${issue}`);
-    for (const warning of item.componentWarnings) result.warnings.push(`${prefix}: ${warning}`);
     for (const issue of item.editabilityIssues) result.errors.push(`${prefix}: ${issue}`);
     for (const warning of item.editabilityWarnings) result.warnings.push(`${prefix}: ${warning}`);
     if (item.editability.semantic > 0) {
-      const nativeCoverage = (item.editability.text + item.editability.native + item.editability.chart) / item.editability.semantic;
+      const nativeCoverage = (item.editability.native + item.editability.chart) / item.editability.semantic;
       if (nativeCoverage < 0.9) result.warnings.push(`${prefix}: native semantic editability coverage is ${Math.round(nativeCoverage * 100)}%; target is at least 90% unless SVG/raster levels were explicitly accepted.`);
     }
     if (item.occupancy !== null && !item.occupancyExempt) {
@@ -322,9 +281,7 @@ try {
       componentTypes: item.distinctComponentTypes,
       primaryEmphasisCount: item.primaryEmphasisCount,
       secondaryEmphasisCount: item.secondaryEmphasisCount,
-      componentInstances: item.componentInstances,
       editability: item.editability,
-      groups: item.groups,
       contentOccupancy: item.occupancy,
     });
   }

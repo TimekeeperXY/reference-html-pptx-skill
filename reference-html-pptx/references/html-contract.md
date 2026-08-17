@@ -38,7 +38,7 @@ Use real `<img>` elements or CSS background images with staged relative paths su
 
 Each page must be independently renderable with no dependency on application state. Avoid external CDNs, web fonts, remote scripts, and network-only assets.
 
-The editable PPTX exporter works at text-node granularity. Inline `<span>` and `<strong>` elements are safe and preserve mixed emphasis. Add `data-pptx-text="true"` to a marked text host when its authored box is wider than the painted glyphs (for example, a centered title or a fixed-width body slot); the exporter will preserve that host box so PowerPoint does not wrap the copy prematurely. Add `data-pptx-ignore="true"` to decorative DOM text that should remain flattened into the background rather than becoming editable.
+The editable PPTX exporter works at text-node granularity. Inline `<span>` and `<strong>` elements are safe and preserve mixed emphasis. Add `data-pptx-ignore="true"` to decorative DOM text that should remain flattened into the background rather than becoming editable.
 
 Use these QA markers on semantic HTML:
 
@@ -48,25 +48,6 @@ Use these QA markers on semantic HTML:
 - `data-text-role="note"` or `data-text-role="source"` for legitimate 14–15px text;
 - `data-density-exempt="true"` or `data-overflow-exempt="true"` only for a documented semantic exception.
 
-## Reusable component instances
-
-When a page uses a recipe from `references/component-registry.json`, mark the component root and its slots:
-
-```html
-<article data-component-type="info-card-row"
-  data-component-instance="info-card-row-01"
-  data-component-variant="icon-left"
-  data-pptx-group="info-card-row-01">
-  <svg data-component-slot="icon" data-pptx-svg="true" data-pptx-render="svg"></svg>
-  <h3 data-component-slot="title">标题</h3>
-  <p data-component-slot="body">说明</p>
-</article>
-```
-
-`data-component-type` is the stable family ID, `data-component-instance` is unique within the deck, `data-component-variant` selects a registered visual variation, and `data-component-slot` names the content-bearing role. Keep the same type and variant across parallel peers. Components are reusable recipes, not fixed page templates: adapt their geometry to the current wireframe while preserving their internal rhythm and boundary language.
-
-Every visible component primitive still needs its own PPTX treatment. The component root does not make an unmarked child editable. Use `data-pptx-group` on the root when the instance should arrive as a PowerPoint group; the existing group exporter keeps its child shapes, charts, SVGs, and text boxes independently editable. Do not nest component groups or overlap instances unless the relationship is intentionally handled as a custom composition.
-
 ## Editable object levels
 
 Every visual object requested as editable must be classified with `data-pptx-render="native|chart|svg|raster"`. Shape and line markers default to native for backward compatibility, chart markers to chart, and SVG markers to SVG.
@@ -74,20 +55,6 @@ Every visual object requested as editable must be classified with `data-pptx-ren
 Use `data-pptx-role` or `data-pptx-semantic="true"` on meaningful objects so the audit can calculate coverage. Use `data-pptx-z` to preserve layer order. Only objects removed from the screenshot and rebuilt count as editable.
 
 Pixels inside an `<img>` or CSS background image are raster. To make baked-in circles, dots, bands, arrows, or other ornaments editable, use a clean base image and recreate each ornament as a DOM primitive.
-
-## PowerPoint groups
-
-Use `data-pptx-group` to express a relationship between two or more atomic editable objects that should move together in PowerPoint:
-
-```html
-<div data-pptx-group="metric-card-01" data-pptx-group-name="Metric card">
-  <div data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-role="card"></div>
-  <div data-pptx-render="chart" data-pptx-chart="doughnut" data-pptx-role="metric-chart"></div>
-  <span data-pptx-role="metric-value">75%</span>
-</div>
-```
-
-The group marker can be placed on a shared wrapper or repeated on each member. The exporter uses the nearest group ancestor, creates a native PowerPoint group only when at least two members are exported, and leaves every child as an independently editable PowerPoint object. Groups are slide-local; do not overlap groups or expect nested group synthesis. Group metadata cannot make pixels in a background image editable, and every member still needs its own native, chart, SVG, raster, or text treatment.
 
 ## Editable shapes
 

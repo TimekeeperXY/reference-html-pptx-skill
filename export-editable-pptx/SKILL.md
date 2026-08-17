@@ -7,7 +7,7 @@ description: Convert HTML or browser-based slide decks into editable PowerPoint 
 
 ## Version
 
-Current export version: **2.6.0** (aligned with `reference-html-pptx` 2.6.0 — atomic editable objects, native doughnut charts, z-order reconstruction, gradient preservation, viewBox-aware SVG `<use>` expansion, and native PowerPoint groups).
+Current export version: **2.5.0** (aligned with `reference-html-pptx` 2.5.0 — atomic editable objects, native doughnut charts, z-order reconstruction, gradient preservation, and viewBox-aware SVG `<use>` expansion).
 
 Convert a rendered HTML deck into a hybrid editable PPTX. Reconstruct visible text, explicitly marked structural graphics, marked doughnut charts, and marked gradients as native PowerPoint objects; preserve unsupported visuals as a text-and-structure-free background. Do not claim that animations, video, canvas, WebGL, CSS filters, arbitrary graphics, or pixels already baked into a background image remain editable.
 
@@ -85,23 +85,6 @@ Supported directions are `horizontal`, `vertical`, `up`, `down`, `diagonal`, and
 
 Do not use CSS pseudo-elements for logic arrows that must be editable. Replace `::before` or `::after` connectors with real DOM elements carrying `data-pptx-line-shape`. CSS borders used only as decoration may remain rasterized; structural dividers, timelines, arrows, and connectors must be marked.
 
-## PowerPoint groups with editable members
-
-Use `data-pptx-group` when several separately annotated primitives should arrive in PowerPoint as one real combination/group object:
-
-```html
-<div data-pptx-group="metric-card-01" data-pptx-group-name="Metric card">
-  <div data-pptx-render="native" data-pptx-shape="roundRect"
-       data-pptx-fill="#FFFFFF" data-pptx-line="#D00000"
-       data-pptx-role="metric-card"></div>
-  <div data-pptx-render="chart" data-pptx-chart="doughnut"
-       data-pptx-values="75,25" data-pptx-role="metric-chart"></div>
-  <div data-pptx-role="metric-value">75%</div>
-</div>
-```
-
-The exporter writes one native `<p:grpSp>` per group with at least two exported members. Shapes, lines, charts, SVG image objects, and text boxes remain individual children inside that group, so users can move the group as a unit, enter the group, edit a child, or ungroup it in PowerPoint. The marker may be placed on a common wrapper or repeated on each member; the nearest ancestor wins. Groups are slide-local, should not overlap, and nested groups are not synthesized. A group with fewer than two exported members is left ungrouped and reported as such.
-
 ## Editable charts
 
 Use a native PowerPoint doughnut chart for percentage rings:
@@ -140,7 +123,7 @@ Before running the exporter, inspect the source for native shapes, lines, charts
 ## Output contract
 
 - Return an absolute path to the generated `.pptx`.
-- Report slides, editable text objects, editable shape objects, editable line objects, editable chart objects, SVG image objects, native PowerPoint group objects, intentional raster-only objects, unsupported semantic objects, and semantic editability coverage.
+- Report slides, editable text objects, editable shape objects, editable line objects, editable chart objects, SVG image objects, intentional raster-only objects, unsupported semantic objects, and semantic editability coverage.
 - Say "hybrid editable PPTX": visible text, marked native structures, and marked charts are editable; marked SVGs remain vector image objects; explicitly raster or unsupported visuals remain in the background image.
 - If fonts differ on the destination machine, warn that PowerPoint may substitute them.
 - Never copy or invoke Dashi PPT's proprietary `html-deck-to-pptx` package from this skill.
