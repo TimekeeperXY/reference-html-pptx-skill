@@ -1,4 +1,4 @@
 interface:
   display_name: "参考图生成高质感可编辑PPT"
-  short_description: "按内容匹配复用组件，生成高质感可编辑PPTX"
-  default_prompt: "Use $reference-html-pptx to match my slide structure to reusable design components, build a polished multi-page HTML deck from my copy and visual references, then export and verify an editable PPTX."
+  short_description: "从内容逻辑、参考图视觉系统到可编辑PPTX的完整工作流"
+  default_prompt: "Use $reference-html-pptx to turn my slide copy and visual references into a polished multi-page HTML deck with a coherent visual system, then export and verify an editable PPTX."

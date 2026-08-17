@@ -1,4 +1,4 @@
-# Editable object contract v3
+# Editable object contract v2
 
 Use this contract when a visual element must remain independently selectable and editable in PowerPoint.
 
@@ -30,20 +30,6 @@ data-pptx-z="20"
 ```
 
 `data-pptx-role` or `data-pptx-semantic="true"` includes the element in semantic editability coverage. `data-pptx-z` controls reconstruction order; typical layers are 10–29 backgrounds and containers, 30–59 charts/lines/icons, and 100+ text.
-
-## Native PowerPoint groups
-
-Add `data-pptx-group` to a common wrapper or to each atomic member when those members should be delivered as one PowerPoint combination/group:
-
-```html
-<div data-pptx-group="flow-step-01" data-pptx-group-name="Step 1">
-  <div data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-role="flow-card"></div>
-  <div data-pptx-render="native" data-pptx-line-shape="horizontal" data-pptx-role="flow-connector"></div>
-  <div data-pptx-role="flow-label">Reason</div>
-</div>
-```
-
-All group members must still be atomic annotations: the group marker is only a relationship instruction and does not make an unmarked background pixel editable. During export, the repository exporter wraps two or more matching native objects in one `<p:grpSp>`. The children remain native PowerPoint shapes, lines, charts, SVG image objects, or text boxes and can be edited individually inside the group or after ungrouping. Groups are slide-local; overlapping or nested group relationships are not synthesized. A one-member group is ignored because PowerPoint grouping requires at least two objects.
 
 ## Native shapes
 
@@ -141,4 +127,3 @@ Before delivery:
 3. Native objects must disappear from the screenshot capture and reappear only as PowerPoint objects.
 4. Report native shapes, native lines, native charts, SVG objects, intentional raster-only objects, unsupported semantic objects, and semantic editability coverage.
 5. Default semantic coverage target is at least 90%; SVG and raster objects do not count as native coverage unless the user accepts those levels.
-6. When groups are requested, verify that every group has at least two exported members and that the PPTX slide XML contains one `<p:grpSp>` per accepted group. The group count must not replace the child-object counts.
