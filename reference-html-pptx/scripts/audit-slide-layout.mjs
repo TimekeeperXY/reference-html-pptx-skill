@@ -147,6 +147,26 @@ try {
       const componentTypes = [...slide.querySelectorAll('[data-component-type]')]
         .filter(visible).map((el) => el.getAttribute('data-component-type')).filter(Boolean);
       const distinctComponentTypes = [...new Set(componentTypes)];
+      const componentRoots = [...slide.querySelectorAll('[data-component-type]')].filter(visible);
+      const componentInstances = componentRoots.map((el) => ({
+        type: el.getAttribute('data-component-type') || '',
+        instance: el.getAttribute('data-component-instance') || '',
+        variant: el.getAttribute('data-component-variant') || '',
+        group: el.getAttribute('data-pptx-group') || '',
+        slots: [...el.querySelectorAll('[data-component-slot]')].map((slot) => slot.getAttribute('data-component-slot')).filter(Boolean),
+      }));
+      const componentIssues = [];
+      const componentWarnings = [];
+      const seenInstances = new Set();
+      for (const component of componentInstances) {
+        const label = component.type || 'component';
+        if (!component.instance) componentIssues.push(`${label}: component is missing data-component-instance.`);
+        else if (seenInstances.has(component.instance)) componentIssues.push(`${label}: duplicate data-component-instance "${component.instance}".`);
+        else seenInstances.add(component.instance);
+        if (!component.variant) componentWarnings.push(`${label}/${component.instance || 'unidentified'}: component is missing data-component-variant.`);
+        if (!component.slots.length) componentWarnings.push(`${label}/${component.instance || 'unidentified'}: component has no named data-component-slot.`);
+        if (!component.group) componentWarnings.push(`${label}/${component.instance || 'unidentified'}: component has no data-pptx-group; it will not arrive as a PowerPoint group.`);
+      }
       const primaryEmphasisCount = [...slide.querySelectorAll('[data-emphasis-level="primary"]')].filter(visible).length;
       const secondaryEmphasisCount = [...slide.querySelectorAll('[data-emphasis-level="secondary"]')].filter(visible).length;
 
@@ -232,6 +252,9 @@ try {
         distinctComponentTypes,
         primaryEmphasisCount,
         secondaryEmphasisCount,
+        componentInstances,
+        componentIssues,
+        componentWarnings,
         editability,
         editabilityIssues,
         editabilityWarnings,
@@ -271,6 +294,8 @@ try {
     if (item.primaryEmphasisCount === 0) result.warnings.push(`${prefix}: no [data-emphasis-level="primary"] focal system is marked.`);
     if (item.primaryEmphasisCount > 2) result.warnings.push(`${prefix}: ${item.primaryEmphasisCount} primary emphasis objects may compete for attention.`);
     if (item.secondaryEmphasisCount > 4) result.warnings.push(`${prefix}: ${item.secondaryEmphasisCount} secondary emphasis objects may dilute the hierarchy.`);
+    for (const issue of item.componentIssues) result.errors.push(`${prefix}: ${issue}`);
+    for (const warning of item.componentWarnings) result.warnings.push(`${prefix}: ${warning}`);
     for (const issue of item.editabilityIssues) result.errors.push(`${prefix}: ${issue}`);
     for (const warning of item.editabilityWarnings) result.warnings.push(`${prefix}: ${warning}`);
     if (item.editability.semantic > 0) {
@@ -297,6 +322,7 @@ try {
       componentTypes: item.distinctComponentTypes,
       primaryEmphasisCount: item.primaryEmphasisCount,
       secondaryEmphasisCount: item.secondaryEmphasisCount,
+      componentInstances: item.componentInstances,
       editability: item.editability,
       groups: item.groups,
       contentOccupancy: item.occupancy,
