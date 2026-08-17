@@ -526,22 +526,48 @@ async function prepareSlide(page, selector, index) {
       mergeDefs(clone);
       return { x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height, svgMarkup: new XMLSerializer().serializeToString(clone), objectName: safeName('svg', el, 'graphic'), ...groupOf(el), z: zOf(el, 50), order: orderOf(el), slideScaleX, slideScaleY };
     }).filter(item => item && item.w > 1 && item.h > 1 && item.x + item.w > 0 && item.y + item.h > 0 && item.x < rect.width && item.y < rect.height);
+    const cumulativeTextScale = (node) => {
+      let scaleX = 1;
+      let scaleY = 1;
+      let current = node;
+      while (current && current !== target) {
+        const transform = getComputedStyle(current).transform;
+        if (transform && transform.startsWith('matrix(')) {
+          const values = transform.slice(7, -1).split(',').map(Number);
+          if (values.length >= 6 && values.every(Number.isFinite)) {
+            scaleX *= Math.hypot(values[0], values[1]);
+            scaleY *= Math.hypot(values[2], values[3]);
+          }
+        }
+        current = current.parentElement;
+      }
+      return { scaleX, scaleY };
+    };
     const texts = textNodes.map((node, textIndex) => {
       const el = node.parentElement;
       const range = document.createRange();
       range.selectNodeContents(node);
-      const r = range.getBoundingClientRect();
+      // Most text slots live inside a positioned container whose width is
+      // intentionally larger than the glyph bounds. When a component marks
+      // that host with data-pptx-text="true", preserve the authored text box
+      // instead of shrinking it to the browser's painted range. This keeps
+      // Chinese copy and other font-metric-sensitive text from wrapping
+      // prematurely after PowerPoint rebuilds it as a native text box.
+      const rangeRect = range.getBoundingClientRect();
+      const hostRect = el.matches('[data-pptx-text="true"]') ? el.getBoundingClientRect() : null;
+      const r = hostRect && hostRect.width > rangeRect.width ? hostRect : rangeRect;
       const cs = getComputedStyle(el);
       const matrix = cs.transform?.startsWith('matrix(') ? cs.transform.slice(7, -1).split(',').map(Number) : null;
       const rotation = matrix ? Math.round(Math.atan2(matrix[1], matrix[0]) * 180 / Math.PI) : 0;
+      const textScale = cumulativeTextScale(el);
       const weight = cs.fontWeight === 'bold' ? 700 : parseInt(cs.fontWeight, 10) || 400;
       const group = groupOf(el);
       return {
         text: node.textContent.replace(/\s+/g, ' ').trim(), x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height,
-        fontFamily: cs.fontFamily, fontSize: parseFloat(cs.fontSize) || 16,
+        fontFamily: cs.fontFamily, fontSize: (parseFloat(cs.fontSize) || 16) * textScale.scaleY,
         fontWeight: weight, fontStyle: cs.fontStyle,
         color: cs.color, opacity: parseFloat(cs.opacity) || 1, textAlign: cs.textAlign,
-        lineHeight: parseFloat(cs.lineHeight) || 0, letterSpacing: parseFloat(cs.letterSpacing) || 0,
+        lineHeight: (parseFloat(cs.lineHeight) || 0) * textScale.scaleY, letterSpacing: (parseFloat(cs.letterSpacing) || 0) * textScale.scaleX,
         rotation, href: el.closest('a[href]')?.href || '', objectName: `${safeName('text', el, 'text')}-${textIndex}`, ...group, z: zOf(el, 100), order: orderOf(el), slideScaleX, slideScaleY
       };
     }).filter(x => x.x + x.w > 0 && x.y + x.h > 0 && x.x < rect.width && x.y < rect.height);

@@ -38,7 +38,7 @@ Use real `<img>` elements or CSS background images with staged relative paths su
 
 Each page must be independently renderable with no dependency on application state. Avoid external CDNs, web fonts, remote scripts, and network-only assets.
 
-The editable PPTX exporter works at text-node granularity. Inline `<span>` and `<strong>` elements are safe and preserve mixed emphasis. Add `data-pptx-ignore="true"` to decorative DOM text that should remain flattened into the background rather than becoming editable.
+The editable PPTX exporter works at text-node granularity. Inline `<span>` and `<strong>` elements are safe and preserve mixed emphasis. Add `data-pptx-text="true"` to a marked text host when its authored box is wider than the painted glyphs (for example, a centered title or a fixed-width body slot); the exporter will preserve that host box so PowerPoint does not wrap the copy prematurely. Add `data-pptx-ignore="true"` to decorative DOM text that should remain flattened into the background rather than becoming editable.
 
 Use these QA markers on semantic HTML:
 
@@ -47,6 +47,25 @@ Use these QA markers on semantic HTML:
 - `data-density-card="true"` on informational cards whose content-to-container density should be audited;
 - `data-text-role="note"` or `data-text-role="source"` for legitimate 14–15px text;
 - `data-density-exempt="true"` or `data-overflow-exempt="true"` only for a documented semantic exception.
+
+## Reusable component instances
+
+When a page uses a recipe from `references/component-registry.json`, mark the component root and its slots:
+
+```html
+<article data-component-type="info-card-row"
+  data-component-instance="info-card-row-01"
+  data-component-variant="icon-left"
+  data-pptx-group="info-card-row-01">
+  <svg data-component-slot="icon" data-pptx-svg="true" data-pptx-render="svg"></svg>
+  <h3 data-component-slot="title">标题</h3>
+  <p data-component-slot="body">说明</p>
+</article>
+```
+
+`data-component-type` is the stable family ID, `data-component-instance` is unique within the deck, `data-component-variant` selects a registered visual variation, and `data-component-slot` names the content-bearing role. Keep the same type and variant across parallel peers. Components are reusable recipes, not fixed page templates: adapt their geometry to the current wireframe while preserving their internal rhythm and boundary language.
+
+Every visible component primitive still needs its own PPTX treatment. The component root does not make an unmarked child editable. Use `data-pptx-group` on the root when the instance should arrive as a PowerPoint group; the existing group exporter keeps its child shapes, charts, SVGs, and text boxes independently editable. Do not nest component groups or overlap instances unless the relationship is intentionally handled as a custom composition.
 
 ## Editable object levels
 

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference HTML PPTX · 组件库预览</title>
+  <link rel="stylesheet" href="../assets/component-library.css">
+  <style>
+    :root {
+      --red: #d00000;
+      --red-bright: #ed171c;
+      --red-soft: #f8d9dc;
+      --ink: #272727;
+      --muted: #606060;
+      --paper: #ffffff;
+      --line: #ead8da;
+      --shadow: 0 10px 26px rgba(89, 21, 25, .11);
+      --shadow-soft: 0 4px 14px rgba(89, 21, 25, .08);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: #e9ecef; color: var(--ink); font-family: Arial, "Microsoft YaHei", sans-serif; }
+    body { scroll-snap-type: y proximity; }
+    .deck-preview { display: grid; gap: 72px; justify-items: center; padding: 48px 0 96px; }
+    .slide-shell { position: relative; width: min(1600px, calc(100vw - 64px)); aspect-ratio: 16 / 9; overflow: hidden; scroll-snap-align: start; background: #fff; box-shadow: 0 18px 48px rgba(0,0,0,.12); }
+    .slide { position: absolute; inset: 0 auto auto 0; width: 1600px; height: 900px; overflow: hidden; transform: scale(var(--slide-scale, 1)); transform-origin: 0 0; background: #fff; }
+    .slide-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+    .slide > *:not(.slide-bg) { z-index: 2; }
+    .catalog-content { position: absolute; left: 92px; right: 92px; top: 182px; bottom: 76px; }
+    .page-kicker { position: absolute; left: 156px; top: 68px; color: var(--red); font-size: 16px; font-weight: 700; letter-spacing: 3px; }
+    .page-title { position: absolute; left: 154px; top: 94px; margin: 0; color: var(--red); font-size: 42px; line-height: 1.08; letter-spacing: 1px; }
+    .page-subtitle { position: absolute; left: 156px; top: 145px; margin: 0; color: #777; font-size: 18px; line-height: 1.4; }
+    .brand-mark { position: absolute; left: 40px; top: 30px; width: 82px; height: 82px; border-radius: 50%; background: var(--red); box-shadow: 8px 12px 18px rgba(80,0,0,.16); z-index: 5; }
+    .brand-mark::after { content: ""; position: absolute; width: 40px; height: 40px; right: -14px; bottom: -12px; border-radius: 50%; background: #fff; box-shadow: 6px 8px 10px rgba(80,0,0,.12); }
+    .page-dots { position: absolute; right: 48px; top: 44px; display: flex; gap: 15px; align-items: center; z-index: 5; }
+    .page-dots i { display: block; width: 19px; height: 19px; border-radius: 50%; background: var(--red); }
+    .page-dots i:last-child { background: #fff; border: 3px solid var(--red); }
+    .component-label { position: absolute; left: 0; top: 4px; color: var(--red); font-size: 16px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; }
+    .component-note { position: absolute; right: 0; top: 4px; color: #9b9b9b; font-size: 16px; }
+    .catalog-content .component { z-index: 3; }
+    .catalog-content .info-card-row { transform: scale(1.04); transform-origin: top left; }
+    .catalog-content .ribbon-detail-card { transform: scale(.82); transform-origin: top left; }
+    .catalog-content .showcase-ribbon { transform: scale(.68); transform-origin: top left; }
+    .catalog-content .metric-tile { box-shadow: var(--shadow); }
+    .catalog-content .metric-ring { transform: scale(.82); transform-origin: top left; }
+    .catalog-content .progress-row { transform: scale(.9); transform-origin: top left; }
+    .catalog-content .process-node { transform: scale(.88); transform-origin: top left; }
+    .catalog-content .comparison-panel { height: 250px; box-shadow: var(--shadow); }
+    .catalog-content .evidence-row { box-shadow: none; }
+    .catalog-content .status-chip { position: absolute; }
+
+    /* The catalog intentionally shows one component family at a time. */
+    .info-card-a { left: 10px; top: 56px; }
+    .info-card-b { left: 620px; top: 56px; }
+    .metric-tile-a { left: 18px; top: 316px; }
+    .metric-tile-b { left: 360px; top: 316px; }
+
+    .ribbon-a { left: 40px; top: 30px; }
+    .ribbon-b { left: 410px; top: 30px; }
+    .ribbon-c { left: 780px; top: 30px; }
+    .slide-two-note { position: absolute; right: 20px; bottom: 4px; width: 380px; color: #888; font-size: 15px; line-height: 1.6; }
+
+    .ring-a { left: 16px; top: 56px; }
+    .ring-b { left: 278px; top: 56px; }
+    .ring-c { left: 540px; top: 56px; }
+    .ring-d { left: 802px; top: 56px; }
+    .progress-a { left: 18px; top: 330px; }
+    .progress-b { left: 18px; top: 410px; }
+    .progress-c { left: 18px; top: 490px; }
+
+    .process-a { left: 20px; top: 48px; }
+    .process-b { left: 360px; top: 48px; }
+    .process-c { left: 700px; top: 48px; }
+    .process-d { left: 1040px; top: 48px; }
+    .process-note { position: absolute; left: 28px; bottom: 26px; color: #777; font-size: 18px; }
+
+    .compare-a { left: 18px; top: 306px; }
+    .compare-b { left: 640px; top: 306px; }
+    .evidence-a { left: 18px; top: 280px; }
+    .evidence-b { left: 18px; top: 362px; }
+    .evidence-c { left: 18px; top: 444px; }
+
+    .chip-a { left: 42px; top: 90px; }
+    .chip-b { left: 250px; top: 90px; }
+    .chip-c { left: 458px; top: 90px; }
+    .chip-d { left: 666px; top: 90px; }
+    .quote-block { position: absolute; left: 36px; top: 220px; width: 980px; height: 260px; }
+    .quote-block__surface { position: absolute; inset: 0; border: 1px solid var(--line); border-radius: 22px; background: #fff; box-shadow: var(--shadow); }
+    .quote-block__bar { position: absolute; left: 0; top: 36px; bottom: 36px; width: 8px; border-radius: 4px; background: var(--red); }
+    .quote-block__mark { position: absolute; left: 58px; top: 28px; color: var(--red); font: 700 70px/1 Georgia, serif; }
+    .quote-block__text { position: absolute; left: 132px; right: 58px; top: 58px; margin: 0; color: var(--ink); font: 700 30px/1.45 Arial, "Microsoft YaHei", sans-serif; }
+    .quote-block__source { position: absolute; left: 134px; bottom: 32px; color: #777; font: 16px/1.2 Arial, "Microsoft YaHei", sans-serif; }
+    .quote-note { position: absolute; right: 14px; bottom: 18px; width: 360px; color: #777; font-size: 16px; line-height: 1.6; }
+    .showcase-quote { left: 36px; top: 354px; }
+    .showcase-quote-note { position: absolute; right: 14px; top: 424px; width: 330px; color: #777; font-size: 16px; line-height: 1.6; }
+    .showcase-ribbon-a { left: 20px; top: 26px; }
+    .showcase-ribbon-b { left: 480px; top: 26px; }
+    .showcase-ribbon-c { left: 940px; top: 26px; }
+
+    .icon { display: block; }
+    .icon path, .icon circle, .icon rect { vector-effect: non-scaling-stroke; }
+    .info-card-row__icon { border-radius: 50%; background: var(--red-bright); padding: 20px; }
+    .info-card-row__icon path, .info-card-row__icon circle, .info-card-row__icon rect { fill: #fff; stroke: #fff; }
+    .metric-ring__surface { box-shadow: var(--shadow-soft); }
+    .metric-ring__chart { border-radius: 50%; background: conic-gradient(var(--red) calc(var(--pct) * 1%), #f1dfe1 0); padding: 24px; }
+    .metric-ring__chart::after { content: ""; display: block; width: 100%; height: 100%; border-radius: 50%; background: #fff; }
+    .metric-ring__center-value { z-index: 4; }
+    .ribbon-detail-card__ribbon { z-index: 4; }
+    .ribbon-detail-card__ribbon-label { z-index: 5; }
+    .ribbon-detail-card__body { font-size: 18px; }
+    .comparison-panel__header { margin-bottom: 18px; }
+    .comparison-panel__row { position: relative; padding-left: 24px; }
+    .comparison-panel__row::before { content: ""; position: absolute; left: 0; top: 9px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+    .evidence-row__title { font-size: 18px; }
+    .evidence-row__body { max-width: 590px; }
+    .evidence-row__value { right: 12px; }
+    .status-chip__icon { background: var(--red); border-radius: 50%; }
+
+    @media (max-width: 900px) {
+      .deck-preview { gap: 28px; padding-top: 20px; }
+      .slide-shell { width: calc(100vw - 24px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck-preview">
+    <div class="slide-shell" data-slide-shell>
+      <section class="slide" data-slide-index="1">
+        <div class="brand-mark" aria-hidden="true"></div><div class="page-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="page-kicker">COMPONENT LIBRARY / 01</div>
+        <h1 class="page-title" data-pptx-role="page-title" data-pptx-z="100">信息模块组件</h1>
+        <p class="page-subtitle" data-pptx-role="page-subtitle" data-pptx-z="100">用于并列事实、分类说明和关键指标的高复用模块</p>
+        <div class="catalog-content" data-slide-content>
+          <div class="component-label" style="top:28px;">01 / info-card-row</div><div class="component-note" style="top:28px;">图标 + 标题 + 说明 · 2–6 个并列实例</div>
+          <article class="component info-card-row info-card-a" data-component-type="info-card-row" data-component-instance="info-card-row-01" data-component-variant="icon-left" data-density-card="true" data-content-block data-pptx-group="info-card-row-01" data-pptx-group-name="Info card row 01">
+            <div class="info-card-row__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="rect" data-pptx-fill="#FFFFFF" data-pptx-line="#F6D5D8" data-pptx-line-width="1" data-pptx-shadow="true" data-pptx-role="info-card-surface" data-pptx-z="20"></div>
+            <div class="info-card-row__icon-badge" data-component-slot="icon-badge" data-pptx-render="native" data-pptx-shape="circle" data-pptx-fill="#ED171C" data-pptx-line-opacity="0" data-pptx-role="info-card-icon-badge" data-pptx-z="30"><svg class="info-card-row__icon" data-component-slot="icon" data-pptx-svg="true" data-pptx-render="svg" data-pptx-role="info-card-icon" data-pptx-z="40" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4a9 9 0 0 0-7 14c2 3 7 7 7 7s5-4 7-7a9 9 0 0 0-7-14Zm0 12a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z" fill="#fff" stroke="#fff" stroke-width="0.6"/></svg></div>
+            <h3 class="info-card-row__title" data-component-slot="title" data-pptx-role="info-card-title" data-pptx-z="100">关键节点</h3><p class="info-card-row__body" data-component-slot="body" data-pptx-role="info-card-body" data-pptx-z="100">用一句清晰的解释，说明这个模块为什么重要。</p>
+            <div class="info-card-row__wedge" data-component-slot="accent-wedge" data-pptx-render="native" data-pptx-shape="trapezoid" data-pptx-fill="#F7C8CD" data-pptx-line-opacity="0" data-pptx-role="info-card-accent" data-pptx-z="19"></div>
+          </article>
+          <article class="component info-card-row info-card-b" data-component-type="info-card-row" data-component-instance="info-card-row-02" data-component-variant="icon-left" data-density-card="true" data-content-block data-pptx-group="info-card-row-02" data-pptx-group-name="Info card row 02">
+            <div class="info-card-row__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="rect" data-pptx-fill="#FFFFFF" data-pptx-line="#F6D5D8" data-pptx-line-width="1" data-pptx-shadow="true" data-pptx-role="info-card-surface" data-pptx-z="20"></div>
+            <div class="info-card-row__icon-badge" data-component-slot="icon-badge" data-pptx-render="native" data-pptx-shape="circle" data-pptx-fill="#ED171C" data-pptx-line-opacity="0" data-pptx-role="info-card-icon-badge" data-pptx-z="30"><svg class="info-card-row__icon" data-component-slot="icon" data-pptx-svg="true" data-pptx-render="svg" data-pptx-role="info-card-icon" data-pptx-z="40" viewBox="0 0 32 32" aria-hidden="true"><path d="M9 7h14v20H9zM12 4h8v3h-8zM13 11v11M19 11v11" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></div>
+            <h3 class="info-card-row__title" data-component-slot="title" data-pptx-role="info-card-title" data-pptx-z="100">关键动作</h3><p class="info-card-row__body" data-component-slot="body" data-pptx-role="info-card-body" data-pptx-z="100">把复杂过程压缩成可扫描、可复用的表达单元。</p>
+            <div class="info-card-row__wedge" data-component-slot="accent-wedge" data-pptx-render="native" data-pptx-shape="trapezoid" data-pptx-fill="#F7C8CD" data-pptx-line-opacity="0" data-pptx-role="info-card-accent" data-pptx-z="19"></div>
+          </article>
+          <div class="component-label" style="top: 278px;">02 / metric-tile</div><div class="component-note" style="top: 278px;">数字 + 单位 + 结论 · 2–6 个并列实例</div>
+          <article class="component metric-tile metric-tile-a" data-component-type="metric-tile" data-component-instance="metric-tile-01" data-component-variant="accent-number" data-content-block data-pptx-group="metric-tile-01" data-pptx-group-name="Metric tile 01">
+            <div class="metric-tile__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-line-opacity="0" data-pptx-shadow="true" data-pptx-role="metric-tile-surface" data-pptx-z="20"></div><span class="metric-tile__value" data-component-slot="value" data-pptx-role="metric-value" data-pptx-z="100">72</span><span class="metric-tile__unit" data-component-slot="unit" data-pptx-role="metric-unit" data-pptx-z="100">%</span><div class="metric-tile__label" data-component-slot="label" data-pptx-role="metric-label" data-pptx-z="100">完成率</div><div class="metric-tile__context" data-component-slot="context" data-pptx-role="metric-context" data-pptx-z="100">适合呈现一个明确结果</div>
+          </article>
+          <article class="component metric-tile metric-tile-b" data-component-type="metric-tile" data-component-instance="metric-tile-02" data-component-variant="accent-number" data-content-block data-pptx-group="metric-tile-02" data-pptx-group-name="Metric tile 02">
+            <div class="metric-tile__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-line-opacity="0" data-pptx-shadow="true" data-pptx-role="metric-tile-surface" data-pptx-z="20"></div><span class="metric-tile__value" data-component-slot="value" data-pptx-role="metric-value" data-pptx-z="100">4.8</span><span class="metric-tile__unit" data-component-slot="unit" data-pptx-role="metric-unit" data-pptx-z="100">/5</span><div class="metric-tile__label" data-component-slot="label" data-pptx-role="metric-label" data-pptx-z="100">满意度</div><div class="metric-tile__context" data-component-slot="context" data-pptx-role="metric-context" data-pptx-z="100">适合做成并列结果卡</div>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <div class="slide-shell" data-slide-shell>
+      <section class="slide" data-slide-index="2">
+        <div class="brand-mark" aria-hidden="true"></div><div class="page-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="page-kicker">COMPONENT LIBRARY / 02</div><h1 class="page-title" data-pptx-role="page-title" data-pptx-z="100">指标与过程组件</h1><p class="page-subtitle" data-pptx-role="page-subtitle" data-pptx-z="100">让“数值证据”和“顺序关系”拥有稳定的视觉语法</p>
+        <div class="catalog-content" data-slide-content>
+          <div class="component-label" style="top:28px;">03 / metric-ring</div><div class="component-note" style="top:28px;">百分比 / 完成度 / 部分与整体</div>
+          <article class="component metric-ring ring-a" data-component-type="metric-ring" data-component-instance="metric-ring-01" data-component-variant="doughnut" data-content-block data-pptx-group="metric-ring-01" data-pptx-group-name="Metric ring 01">
+            <div class="metric-ring__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-line-opacity="0" data-pptx-role="metric-ring-surface" data-pptx-z="20"></div><div class="metric-ring__chart" style="--pct:72" data-component-slot="chart" data-pptx-render="chart" data-pptx-chart="doughnut" data-pptx-values="72,28" data-pptx-labels="Complete,Remaining" data-pptx-colors="#D00000,#F1DFE1" data-pptx-hole-size="72" data-pptx-role="metric-ring-chart" data-pptx-z="30"></div><div class="metric-ring__center-value" data-component-slot="center-value" data-pptx-role="metric-ring-value" data-pptx-z="100">72%</div><div class="metric-ring__label" data-component-slot="label" data-pptx-role="metric-ring-label" data-pptx-z="100">完成进度</div>
+          </article>
+          <article class="component metric-ring ring-b" data-component-type="metric-ring" data-component-instance="metric-ring-02" data-component-variant="doughnut" data-content-block data-pptx-group="metric-ring-02" data-pptx-group-name="Metric ring 02">
+            <div class="metric-ring__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-line-opacity="0" data-pptx-role="metric-ring-surface" data-pptx-z="20"></div><div class="metric-ring__chart" style="--pct:48" data-component-slot="chart" data-pptx-render="chart" data-pptx-chart="doughnut" data-pptx-values="48,52" data-pptx-labels="Current,Remaining" data-pptx-colors="#D00000,#F1DFE1" data-pptx-hole-size="72" data-pptx-role="metric-ring-chart" data-pptx-z="30"></div><div class="metric-ring__center-value" data-component-slot="center-value" data-pptx-role="metric-ring-value" data-pptx-z="100">48%</div><div class="metric-ring__label" data-component-slot="label" data-pptx-role="metric-ring-label" data-pptx-z="100">覆盖率</div>
+          </article>
+          <article class="component metric-ring ring-c" data-component-type="metric-ring" data-component-instance="metric-ring-03" data-component-variant="doughnut" data-content-block data-pptx-group="metric-ring-03" data-pptx-group-name="Metric ring 03">
+            <div class="metric-ring__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-line-opacity="0" data-pptx-role="metric-ring-surface" data-pptx-z="20"></div><div class="metric-ring__chart" style="--pct:86" data-component-slot="chart" data-pptx-render="chart" data-pptx-chart="doughnut" data-pptx-values="86,14" data-pptx-labels="Pass,Remaining" data-pptx-colors="#D00000,#F1DFE1" data-pptx-hole-size="72" data-pptx-role="metric-ring-chart" data-pptx-z="30"></div><div class="metric-ring__center-value" data-component-slot="center-value" data-pptx-role="metric-ring-value" data-pptx-z="100">86%</div><div class="metric-ring__label" data-component-slot="label" data-pptx-role="metric-ring-label" data-pptx-z="100">通过率</div>
+          </article>
+          <article class="component metric-ring ring-d" data-component-type="metric-ring" data-component-instance="metric-ring-04" data-component-variant="doughnut" data-content-block data-pptx-group="metric-ring-04" data-pptx-group-name="Metric ring 04">
+            <div class="metric-ring__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-line-opacity="0" data-pptx-role="metric-ring-surface" data-pptx-z="20"></div><div class="metric-ring__chart" style="--pct:64" data-component-slot="chart" data-pptx-render="chart" data-pptx-chart="doughnut" data-pptx-values="64,36" data-pptx-labels="Used,Remaining" data-pptx-colors="#D00000,#F1DFE1" data-pptx-hole-size="72" data-pptx-role="metric-ring-chart" data-pptx-z="30"></div><div class="metric-ring__center-value" data-component-slot="center-value" data-pptx-role="metric-ring-value" data-pptx-z="100">64%</div><div class="metric-ring__label" data-component-slot="label" data-pptx-role="metric-ring-label" data-pptx-z="100">资源占用</div>
+          </article>
+          <div class="component-label" style="top: 284px;">04 / progress-row</div><div class="component-note" style="top: 284px;">标签 + 轨道 + 填充 + 数值</div>
+          <div class="component progress-row progress-a" data-component-type="progress-row" data-component-instance="progress-row-01" data-component-variant="single-bar" data-content-block data-pptx-group="progress-row-01" data-pptx-group-name="Progress row 01"><span class="progress-row__label" data-component-slot="label" data-pptx-role="progress-label" data-pptx-z="100">模型准确率</span><div class="progress-row__track" data-component-slot="track" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#F2E4E5" data-pptx-line-opacity="0" data-pptx-role="progress-track" data-pptx-z="20"></div><div class="progress-row__fill" style="width:330px" data-component-slot="fill" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="progress-fill" data-pptx-z="21"></div><span class="progress-row__value" data-component-slot="value" data-pptx-role="progress-value" data-pptx-z="100">78%</span></div>
+          <div class="component progress-row progress-b" data-component-type="progress-row" data-component-instance="progress-row-02" data-component-variant="single-bar" data-content-block data-pptx-group="progress-row-02" data-pptx-group-name="Progress row 02"><span class="progress-row__label" data-component-slot="label" data-pptx-role="progress-label" data-pptx-z="100">响应速度</span><div class="progress-row__track" data-component-slot="track" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#F2E4E5" data-pptx-line-opacity="0" data-pptx-role="progress-track" data-pptx-z="20"></div><div class="progress-row__fill" style="width:260px" data-component-slot="fill" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="progress-fill" data-pptx-z="21"></div><span class="progress-row__value" data-component-slot="value" data-pptx-role="progress-value" data-pptx-z="100">61%</span></div>
+          <div class="component progress-row progress-c" data-component-type="progress-row" data-component-instance="progress-row-03" data-component-variant="single-bar" data-content-block data-pptx-group="progress-row-03" data-pptx-group-name="Progress row 03"><span class="progress-row__label" data-component-slot="label" data-pptx-role="progress-label" data-pptx-z="100">用户留存</span><div class="progress-row__track" data-component-slot="track" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#F2E4E5" data-pptx-line-opacity="0" data-pptx-role="progress-track" data-pptx-z="20"></div><div class="progress-row__fill" style="width:388px" data-component-slot="fill" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="progress-fill" data-pptx-z="21"></div><span class="progress-row__value" data-component-slot="value" data-pptx-role="progress-value" data-pptx-z="100">92%</span></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="slide-shell" data-slide-shell>
+      <section class="slide" data-slide-index="3">
+        <div class="brand-mark" aria-hidden="true"></div><div class="page-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="page-kicker">COMPONENT LIBRARY / 03</div><h1 class="page-title" data-pptx-role="page-title" data-pptx-z="100">结构与对比组件</h1><p class="page-subtitle" data-pptx-role="page-subtitle" data-pptx-z="100">把关系、差异和证据转成可扫描的版式单元</p>
+        <div class="catalog-content" data-slide-content>
+          <div class="component-label" style="top:20px;">05 / process-node</div><div class="component-note" style="top:20px;">步骤节点 + 语义连接线 · 2–7 个节点</div>
+          <div class="component process-node process-a" data-component-type="process-node" data-component-instance="process-node-01" data-component-variant="numbered" data-content-block data-pptx-group="process-node-01" data-pptx-group-name="Process node 01"><div class="process-node__surface" data-component-slot="node-surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-shadow="true" data-pptx-role="process-surface" data-pptx-z="20"></div><div class="process-node__step-label" data-component-slot="step-label" data-pptx-render="native" data-pptx-shape="ellipse" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="process-step" data-pptx-z="40">1</div><h3 class="process-node__title" data-component-slot="title" data-pptx-role="process-title" data-pptx-z="100">输入</h3><p class="process-node__body" data-component-slot="body" data-pptx-role="process-body" data-pptx-z="100">明确问题与边界</p><div class="process-node__connector" data-component-slot="connector" data-pptx-render="native" data-pptx-line-shape="horizontal" data-pptx-line-start="0,50" data-pptx-line-end="100,50" data-pptx-line-color="#D00000" data-pptx-line-width="2" data-pptx-line-end-arrow="triangle" data-pptx-role="process-connector" data-pptx-z="40"></div></div>
+          <div class="component process-node process-b" data-component-type="process-node" data-component-instance="process-node-02" data-component-variant="numbered" data-content-block data-pptx-group="process-node-02" data-pptx-group-name="Process node 02"><div class="process-node__surface" data-component-slot="node-surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-shadow="true" data-pptx-role="process-surface" data-pptx-z="20"></div><div class="process-node__step-label" data-component-slot="step-label" data-pptx-render="native" data-pptx-shape="ellipse" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="process-step" data-pptx-z="40">2</div><h3 class="process-node__title" data-component-slot="title" data-pptx-role="process-title" data-pptx-z="100">处理</h3><p class="process-node__body" data-component-slot="body" data-pptx-role="process-body" data-pptx-z="100">抽取结构与重点</p><div class="process-node__connector" data-component-slot="connector" data-pptx-render="native" data-pptx-line-shape="horizontal" data-pptx-line-start="0,50" data-pptx-line-end="100,50" data-pptx-line-color="#D00000" data-pptx-line-width="2" data-pptx-line-end-arrow="triangle" data-pptx-role="process-connector" data-pptx-z="40"></div></div>
+          <div class="component process-node process-c" data-component-type="process-node" data-component-instance="process-node-03" data-component-variant="numbered" data-content-block data-pptx-group="process-node-03" data-pptx-group-name="Process node 03"><div class="process-node__surface" data-component-slot="node-surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-shadow="true" data-pptx-role="process-surface" data-pptx-z="20"></div><div class="process-node__step-label" data-component-slot="step-label" data-pptx-render="native" data-pptx-shape="ellipse" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="process-step" data-pptx-z="40">3</div><h3 class="process-node__title" data-component-slot="title" data-pptx-role="process-title" data-pptx-z="100">验证</h3><p class="process-node__body" data-component-slot="body" data-pptx-role="process-body" data-pptx-z="100">检查逻辑与证据</p><div class="process-node__connector" data-component-slot="connector" data-pptx-render="native" data-pptx-line-shape="horizontal" data-pptx-line-start="0,50" data-pptx-line-end="100,50" data-pptx-line-color="#D00000" data-pptx-line-width="2" data-pptx-line-end-arrow="triangle" data-pptx-role="process-connector" data-pptx-z="40"></div></div>
+          <div class="component process-node process-d" data-component-type="process-node" data-component-instance="process-node-04" data-component-variant="numbered" data-content-block data-pptx-group="process-node-04" data-pptx-group-name="Process node 04"><div class="process-node__surface" data-component-slot="node-surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-shadow="true" data-pptx-role="process-surface" data-pptx-z="20"></div><div class="process-node__step-label" data-component-slot="step-label" data-pptx-render="native" data-pptx-shape="ellipse" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="process-step" data-pptx-z="40">4</div><h3 class="process-node__title" data-component-slot="title" data-pptx-role="process-title" data-pptx-z="100">输出</h3><p class="process-node__body" data-component-slot="body" data-pptx-role="process-body" data-pptx-z="100">形成可编辑页面</p></div>
+          <div class="process-note" data-pptx-role="process-note" data-pptx-z="100">组件可以重复调用；语义连接线只在确实表达“下一步”时出现。</div>
+          <div class="component-label" style="top: 278px;">06 / comparison-panel</div><div class="component-note" style="top: 278px;">镜像比较 / before-after / pros-cons</div>
+          <article class="component comparison-panel compare-a" data-component-type="comparison-panel" data-component-instance="comparison-panel-01" data-component-variant="mirror" data-density-card="true" data-content-block data-pptx-group="comparison-panel-01" data-pptx-group-name="Comparison panel 01"><div class="comparison-panel__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-line-opacity="0" data-pptx-shadow="true" data-pptx-role="comparison-surface" data-pptx-z="20"></div><div class="comparison-panel__header" data-component-slot="header" data-pptx-role="comparison-header" data-pptx-z="100">原始方式</div><div class="comparison-panel__row" data-component-slot="row" data-pptx-role="comparison-row" data-pptx-z="100">从零开始组织页面</div><div class="comparison-panel__row" data-component-slot="row" data-pptx-role="comparison-row" data-pptx-z="100">每次重新决定视觉语法</div><div class="comparison-panel__row comparison-panel__highlight" data-component-slot="highlight" data-pptx-role="comparison-highlight" data-pptx-z="100">适合完全定制的独特页面</div></article>
+          <article class="component comparison-panel compare-b" data-component-type="comparison-panel" data-component-instance="comparison-panel-02" data-component-variant="mirror" data-density-card="true" data-content-block data-pptx-group="comparison-panel-02" data-pptx-group-name="Comparison panel 02"><div class="comparison-panel__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-line-opacity="0" data-pptx-shadow="true" data-pptx-role="comparison-surface" data-pptx-z="20"></div><div class="comparison-panel__header" data-component-slot="header" data-pptx-role="comparison-header" data-pptx-z="100">组件方式</div><div class="comparison-panel__row" data-component-slot="row" data-pptx-role="comparison-row" data-pptx-z="100">匹配结构后直接复用</div><div class="comparison-panel__row" data-component-slot="row" data-pptx-role="comparison-row" data-pptx-z="100">子元素天然带导出标记</div><div class="comparison-panel__row comparison-panel__highlight" data-component-slot="highlight" data-pptx-role="comparison-highlight" data-pptx-z="100">适合稳定、高频的内容模式</div></article>
+        </div>
+      </section>
+    </div>
+
+    <div class="slide-shell" data-slide-shell>
+      <section class="slide" data-slide-index="4">
+        <div class="brand-mark" aria-hidden="true"></div><div class="page-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="page-kicker">COMPONENT LIBRARY / 04</div><h1 class="page-title" data-pptx-role="page-title" data-pptx-z="100">证据、标签与引用组件</h1><p class="page-subtitle" data-pptx-role="page-subtitle" data-pptx-z="100">为说明、状态和观点提供轻量但有辨识度的容器</p>
+        <div class="catalog-content" data-slide-content>
+          <div class="component-label" style="top:252px;">08 / evidence-row</div><div class="component-note" style="top:252px;">结论 / 来源 / 解释 · 2–8 行</div>
+          <div class="component evidence-row evidence-a" data-component-type="evidence-row" data-component-instance="evidence-row-01" data-component-variant="value-right" data-content-block data-pptx-group="evidence-row-01" data-pptx-group-name="Evidence row 01"><div class="evidence-row__marker" data-component-slot="marker" data-pptx-render="native" data-pptx-shape="ellipse" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="evidence-marker" data-pptx-z="40"></div><div class="evidence-row__title" data-component-slot="title" data-pptx-role="evidence-title" data-pptx-z="100">标注一个关键发现</div><div class="evidence-row__body" data-component-slot="body" data-pptx-role="evidence-body" data-pptx-z="100">用一行补充说明它来自哪里，以及它为什么支持当前结论。</div><div class="evidence-row__value" data-component-slot="value" data-pptx-role="evidence-value" data-pptx-z="100">01</div><div class="evidence-row__divider" data-component-slot="divider" data-pptx-render="native" data-pptx-shape="rect" data-pptx-fill="#EAD8DA" data-pptx-line-opacity="0" data-pptx-role="evidence-divider" data-pptx-z="20"></div></div>
+          <div class="component evidence-row evidence-b" data-component-type="evidence-row" data-component-instance="evidence-row-02" data-component-variant="value-right" data-content-block data-pptx-group="evidence-row-02" data-pptx-group-name="Evidence row 02"><div class="evidence-row__marker" data-component-slot="marker" data-pptx-render="native" data-pptx-shape="ellipse" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="evidence-marker" data-pptx-z="40"></div><div class="evidence-row__title" data-component-slot="title" data-pptx-role="evidence-title" data-pptx-z="100">把证据和结论对齐</div><div class="evidence-row__body" data-component-slot="body" data-pptx-role="evidence-body" data-pptx-z="100">平行行使用相同的标题、正文和数值位置，读者可以快速比较。</div><div class="evidence-row__value" data-component-slot="value" data-pptx-role="evidence-value" data-pptx-z="100">02</div><div class="evidence-row__divider" data-component-slot="divider" data-pptx-render="native" data-pptx-shape="rect" data-pptx-fill="#EAD8DA" data-pptx-line-opacity="0" data-pptx-role="evidence-divider" data-pptx-z="20"></div></div>
+          <div class="component evidence-row evidence-c" data-component-type="evidence-row" data-component-instance="evidence-row-03" data-component-variant="value-right" data-content-block data-pptx-group="evidence-row-03" data-pptx-group-name="Evidence row 03"><div class="evidence-row__marker" data-component-slot="marker" data-pptx-render="native" data-pptx-shape="ellipse" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="evidence-marker" data-pptx-z="40"></div><div class="evidence-row__title" data-component-slot="title" data-pptx-role="evidence-title" data-pptx-z="100">让引用保持轻量</div><div class="evidence-row__body" data-component-slot="body" data-pptx-role="evidence-body" data-pptx-z="100">来源可以作为辅助信息出现，而不是抢走页面的主阅读路径。</div><div class="evidence-row__value" data-component-slot="value" data-pptx-role="evidence-value" data-pptx-z="100">03</div><div class="evidence-row__divider" data-component-slot="divider" data-pptx-render="native" data-pptx-shape="rect" data-pptx-fill="#EAD8DA" data-pptx-line-opacity="0" data-pptx-role="evidence-divider" data-pptx-z="20"></div></div>
+          <div class="component-label" style="top: 48px;">09 / status-chip</div><div class="component-note" style="top: 48px;">状态 / 分类 / 优先级 · 轻量标记</div>
+          <div class="component status-chip chip-a" data-component-type="status-chip" data-component-instance="status-chip-01" data-component-variant="filled" data-content-block data-pptx-group="status-chip-01" data-pptx-group-name="Status chip 01"><div class="status-chip__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#F9E4E6" data-pptx-line-opacity="0" data-pptx-role="status-surface" data-pptx-z="20"></div><svg class="status-chip__icon" data-component-slot="icon" data-pptx-svg="true" data-pptx-render="svg" data-pptx-role="status-icon" data-pptx-z="40" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5 6.3 12 13 4.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-component-slot="label" data-pptx-role="status-label" data-pptx-z="100">已完成</span></div>
+          <div class="component status-chip status-chip--outline chip-b" data-component-type="status-chip" data-component-instance="status-chip-02" data-component-variant="outline" data-content-block data-pptx-group="status-chip-02" data-pptx-group-name="Status chip 02"><div class="status-chip__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#D00000" data-pptx-line-width="1" data-pptx-line-opacity="100" data-pptx-role="status-surface" data-pptx-z="20"></div><svg class="status-chip__icon" data-component-slot="icon" data-pptx-svg="true" data-pptx-render="svg" data-pptx-role="status-icon" data-pptx-z="40" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4" fill="#D00000"/></svg><span data-component-slot="label" data-pptx-role="status-label" data-pptx-z="100">进行中</span></div>
+          <div class="component status-chip chip-c" data-component-type="status-chip" data-component-instance="status-chip-03" data-component-variant="filled" data-content-block data-pptx-group="status-chip-03" data-pptx-group-name="Status chip 03"><div class="status-chip__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#F9E4E6" data-pptx-line-opacity="0" data-pptx-role="status-surface" data-pptx-z="20"></div><svg class="status-chip__icon" data-component-slot="icon" data-pptx-svg="true" data-pptx-render="svg" data-pptx-role="status-icon" data-pptx-z="40" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v7M8 13v1" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg><span data-component-slot="label" data-pptx-role="status-label" data-pptx-z="100">需关注</span></div>
+          <div class="component status-chip status-chip--outline chip-d" data-component-type="status-chip" data-component-instance="status-chip-04" data-component-variant="outline" data-content-block data-pptx-group="status-chip-04" data-pptx-group-name="Status chip 04"><div class="status-chip__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#D00000" data-pptx-line-width="1" data-pptx-line-opacity="100" data-pptx-role="status-surface" data-pptx-z="20"></div><svg class="status-chip__icon" data-component-slot="icon" data-pptx-svg="true" data-pptx-render="svg" data-pptx-role="status-icon" data-pptx-z="40" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 6a3 3 0 1 1 5.2 2c-.9.8-1.7 1-1.7 2.2M8 13v.1" fill="none" stroke="#D00000" stroke-width="1.8" stroke-linecap="round"/></svg><span data-component-slot="label" data-pptx-role="status-label" data-pptx-z="100">待确认</span></div>
+        </div>
+      </section>
+    </div>
+    <div class="slide-shell" data-slide-shell>
+      <section class="slide" data-slide-index="5">
+        <div class="brand-mark" aria-hidden="true"></div><div class="page-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="page-kicker">COMPONENT LIBRARY / 05</div><h1 class="page-title" data-pptx-role="page-title" data-pptx-z="100">高阶复用组件</h1><p class="page-subtitle" data-pptx-role="page-subtitle" data-pptx-z="100">把重复出现的视觉语法提前做成可以调用的设计资产</p>
+        <div class="catalog-content" data-slide-content>
+          <div class="component-label">07 / ribbon-detail-card</div><div class="component-note">角标 + 标题 + 两段详情 · 3 个并列实例</div>
+          <article class="component ribbon-detail-card showcase-ribbon showcase-ribbon-a" data-component-type="ribbon-detail-card" data-component-instance="ribbon-detail-card-01" data-component-variant="corner-ribbon" data-density-card="true" data-content-block data-pptx-group="ribbon-detail-card-01" data-pptx-group-name="Ribbon detail card 01">
+            <div class="ribbon-detail-card__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#D00000" data-pptx-line-width="1.2" data-pptx-shadow="true" data-pptx-role="ribbon-card-surface" data-pptx-z="20"></div>
+            <div class="ribbon-detail-card__ribbon" data-component-slot="ribbon" data-pptx-render="native" data-pptx-shape="parallelogram" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-rotation="-45" data-pptx-role="ribbon-card-ribbon" data-pptx-z="30"></div><span class="ribbon-detail-card__ribbon-label" data-component-slot="ribbon-label" data-pptx-role="ribbon-card-label" data-pptx-z="100">20XX</span>
+            <h3 class="ribbon-detail-card__title" data-component-slot="title" data-pptx-role="ribbon-card-title" data-pptx-z="100">快速启动</h3><p class="ribbon-detail-card__body ribbon-detail-card__body--primary" data-component-slot="body-primary" data-pptx-role="ribbon-card-body-primary" data-pptx-z="100">适合版本、里程碑或阶段说明。</p><p class="ribbon-detail-card__body ribbon-detail-card__body--secondary" data-component-slot="body-secondary" data-pptx-role="ribbon-card-body-secondary" data-pptx-z="100">内容较长时，保留两段独立信息。</p>
+          </article>
+          <article class="component ribbon-detail-card showcase-ribbon showcase-ribbon-b" data-component-type="ribbon-detail-card" data-component-instance="ribbon-detail-card-02" data-component-variant="corner-ribbon" data-density-card="true" data-content-block data-pptx-group="ribbon-detail-card-02" data-pptx-group-name="Ribbon detail card 02">
+            <div class="ribbon-detail-card__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#D00000" data-pptx-line-width="1.2" data-pptx-shadow="true" data-pptx-role="ribbon-card-surface" data-pptx-z="20"></div>
+            <div class="ribbon-detail-card__ribbon" data-component-slot="ribbon" data-pptx-render="native" data-pptx-shape="parallelogram" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-rotation="-45" data-pptx-role="ribbon-card-ribbon" data-pptx-z="30"></div><span class="ribbon-detail-card__ribbon-label" data-component-slot="ribbon-label" data-pptx-role="ribbon-card-label" data-pptx-z="100">20XX</span>
+            <h3 class="ribbon-detail-card__title" data-component-slot="title" data-pptx-role="ribbon-card-title" data-pptx-z="100">结构沉淀</h3><p class="ribbon-detail-card__body ribbon-detail-card__body--primary" data-component-slot="body-primary" data-pptx-role="ribbon-card-body-primary" data-pptx-z="100">适合分类、选项或角色对比。</p><p class="ribbon-detail-card__body ribbon-detail-card__body--secondary" data-component-slot="body-secondary" data-pptx-role="ribbon-card-body-secondary" data-pptx-z="100">每张卡片都有同一套内部节奏。</p>
+          </article>
+          <article class="component ribbon-detail-card showcase-ribbon showcase-ribbon-c" data-component-type="ribbon-detail-card" data-component-instance="ribbon-detail-card-03" data-component-variant="corner-ribbon" data-density-card="true" data-content-block data-pptx-group="ribbon-detail-card-03" data-pptx-group-name="Ribbon detail card 03">
+            <div class="ribbon-detail-card__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#D00000" data-pptx-line-width="1.2" data-pptx-shadow="true" data-pptx-role="ribbon-card-surface" data-pptx-z="20"></div>
+            <div class="ribbon-detail-card__ribbon" data-component-slot="ribbon" data-pptx-render="native" data-pptx-shape="parallelogram" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-rotation="-45" data-pptx-role="ribbon-card-ribbon" data-pptx-z="30"></div><span class="ribbon-detail-card__ribbon-label" data-component-slot="ribbon-label" data-pptx-role="ribbon-card-label" data-pptx-z="100">20XX</span>
+            <h3 class="ribbon-detail-card__title" data-component-slot="title" data-pptx-role="ribbon-card-title" data-pptx-z="100">稳定复用</h3><p class="ribbon-detail-card__body ribbon-detail-card__body--primary" data-component-slot="body-primary" data-pptx-role="ribbon-card-body-primary" data-pptx-z="100">适合需要快速扫描的多项内容。</p><p class="ribbon-detail-card__body ribbon-detail-card__body--secondary" data-component-slot="body-secondary" data-pptx-role="ribbon-card-body-secondary" data-pptx-z="100">设计资产与内容结构一起复用。</p>
+          </article>
+          <div class="component-label" style="top:326px;">10 / quote-block</div><div class="component-note" style="top:326px;">观点 / 原则 / 来源 · 1 个主引用</div>
+          <article class="component quote-block showcase-quote" data-component-type="quote-block" data-component-instance="quote-block-01" data-component-variant="accent-bar" data-content-block data-emphasis-level="primary" data-pptx-group="quote-block-01" data-pptx-group-name="Quote block 01"><div class="quote-block__surface" data-component-slot="surface" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#FFFFFF" data-pptx-line="#EAD8DA" data-pptx-line-opacity="0" data-pptx-shadow="true" data-pptx-role="quote-surface" data-pptx-z="20"></div><div class="quote-block__bar" data-component-slot="accent-bar" data-pptx-render="native" data-pptx-shape="roundRect" data-pptx-fill="#D00000" data-pptx-line-opacity="0" data-pptx-role="quote-accent" data-pptx-z="40"></div><div class="quote-block__mark" data-component-slot="quote-mark" data-pptx-role="quote-mark" data-pptx-z="100">“</div><p class="quote-block__text" data-component-slot="text" data-pptx-role="quote-text" data-pptx-z="100">当内容结构稳定时，组件库让设计把注意力放回结论，而不是重复搭建。</p><div class="quote-block__source" data-component-slot="source" data-pptx-role="quote-source" data-pptx-z="100">— 组件化排版原则</div></article>
+          <div class="showcase-quote-note" data-pptx-role="quote-note" data-pptx-z="100">组件库不是限制创意，而是把高频、可验证的视觉语法预先做好；独特内容仍然可以使用自定义组合。</div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script>
+    function fitSlides() {
+      document.querySelectorAll('.slide-shell').forEach(shell => {
+        const scale = Math.min(shell.clientWidth / 1600, shell.clientHeight / 900);
+        shell.style.setProperty('--slide-scale', scale.toFixed(4));
+      });
+    }
+    addEventListener('resize', fitSlides);
+    fitSlides();
+  </script>
+</body>
+</html>
+
+
